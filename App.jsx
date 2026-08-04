@@ -364,6 +364,7 @@ function Login({ motivo }) {
               ))}
               {gente.length === 0 && <p className="text-sm text-slate-400">Cargando usuarios...</p>}
             </div>
+            <p className="text-[10px] text-slate-300 text-center mt-5">v2.1</p>
           </>
         )}
 
@@ -494,8 +495,10 @@ function SiNo({ titulo, valor, montoValor, onSi, onNo, onMonto, on, btn, ph }) {
         </div>
       </div>
       {v === true && (
-        <input type="number" inputMode="decimal" className="w-full mt-3 border border-slate-300 rounded-lg px-3 py-3 text-lg bg-white"
-          placeholder={ph} value={montoValor} onChange={(e) => onMonto(e.target.value)} />
+        <input type="text" inputMode="decimal" autoComplete="off"
+          className="w-full mt-3 border border-slate-300 rounded-lg px-3 py-3 text-lg bg-white"
+          placeholder={ph} value={montoValor}
+          onChange={(e) => onMonto(e.target.value.replace(/[^0-9.]/g, ""))} />
       )}
     </div>
   );
