@@ -720,6 +720,8 @@ export default function App() {
             const cards = [
               { label: "Total", value: total, bg: "#534AB7" },
               { label: "Resueltas", value: byStatus["atendido_resuelto"] || 0, bg: "#0F6E56" },
+              { label: "Referido San Juan", value: filtered.filter(r => r.status === "dirigido" && r.centro_dirigido === "San Juan").length, bg: "#0F6E56" },
+              { label: "Referido San Germán", value: filtered.filter(r => r.status === "dirigido" && r.centro_dirigido === "San Germán").length, bg: "#185FA5" },
               { label: "Citados Marey", value: byStatus["atendido_cita_marey"] || 0, bg: "#185FA5" },
               { label: "Cita domicilio", value: (byStatus["cita_domicilio"]||0) + (byStatus["cita_confirmada"]||0), bg: "#854F0B" },
               { label: "No contestaron", value: byStatus["no_contesto"] || 0, bg: "#A32D2D" },
