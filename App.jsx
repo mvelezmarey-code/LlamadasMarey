@@ -434,6 +434,7 @@ export default function App() {
   if (role === "agent") tabs = ["llamadas", "queue", "citas", "historial"];
   else if (role === "tech") tabs = ["queue", "citas", "stats", "historial"];
   else if (role === "admin") tabs = ["dashboard", "llamadas", "queue", "citas", "stats", "historial"];
+  if (user === "Carlos" && !tabs.includes("dashboard")) tabs = ["dashboard", ...tabs];
 
   const tabLabels = { llamadas: "Nueva llamada", queue: "Queue", citas: "Citas", historial: "Historial", dashboard: "Dashboard", stats: "Estadísticas" };
   const tabColors = { llamadas: "#534AB7", queue: "#854F0B", citas: "#185FA5", historial: "#5F5E5A", dashboard: "#0F6E56", stats: "#534AB7" };
