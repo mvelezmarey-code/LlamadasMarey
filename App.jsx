@@ -522,6 +522,7 @@ export default function App() {
     await supabase.from("llamadas_perdidas").update({ estado: "abierta", tomada_por: null, tomada_at: null }).eq("id", p.id);
     fetchPerdidas();
   };
+  // Atender: la toma (desaparece de la lista del otro) y abre el formulario con el telefono puesto
   const devolver = (p) => {
     setDevolviendo(p);
     if (p.estado === "abierta") tomar(p);
@@ -530,16 +531,26 @@ export default function App() {
     setTab("llamadas");
     setTimeout(() => searchPhone(fmtTel(p.telefono)), 50);
   };
-  const noContestoPerdida = async (p) => {
+  const limpiarAtendiendo = () => { setDevolviendo(null); setForm(FORM0); setClienteFound(null); setClienteHistory([]); setTab("perdidas"); };
+  // No contesto: suma un intento y la suelta para que vuelva a la lista; al tercero se cierra
+  const noContestoAtendiendo = async () => {
+    const p = devolviendo; if (!p) return;
     const n = (p.intentos || 0) + 1;
-    const upd = { intentos: n, ultimo_intento: new Date().toISOString(), estado: p.estado === "abierta" ? "tomada" : p.estado, tomada_por: p.tomada_por || user, tomada_at: p.tomada_at || new Date().toISOString() };
-    if (n >= 3) Object.assign(upd, { estado: "cerrada", resultado: "no_contesta", cerrada_por: user, cerrada_at: new Date().toISOString() });
+    const upd = { intentos: n, ultimo_intento: new Date().toISOString(), estado: "abierta", tomada_por: null, tomada_at: null };
+    if (n >= 3) Object.assign(upd, { estado: "cerrada", resultado: "no_contesta", cerrada_por: user, cerrada_at: new Date().toISOString(), tomada_por: user });
     await supabase.from("llamadas_perdidas").update(upd).eq("id", p.id);
-    fetchPerdidas();
+    limpiarAtendiendo(); fetchPerdidas();
   };
-  const cerrarPerdida = async (p, resultado) => {
-    await supabase.from("llamadas_perdidas").update({ estado: "cerrada", resultado, cerrada_por: user, cerrada_at: new Date().toISOString() }).eq("id", p.id);
-    fetchPerdidas();
+  const spamAtendiendo = async () => {
+    const p = devolviendo; if (!p) return;
+    await supabase.from("llamadas_perdidas").update({ estado: "cerrada", resultado: "spam", cerrada_por: user, cerrada_at: new Date().toISOString() }).eq("id", p.id);
+    limpiarAtendiendo(); fetchPerdidas();
+  };
+  // Cancelar: la suelta y vuelve a la lista de los dos
+  const cancelarAtendiendo = async () => {
+    const p = devolviendo; if (!p) return;
+    await soltar(p);
+    limpiarAtendiendo();
   };
 
   /* ---------- acciones existentes ---------- */
@@ -596,7 +607,9 @@ export default function App() {
   /* ---------- derivados ---------- */
   const pendingCount = records.filter(r => r.status === "pendiente_willy").length;
   const citasCount = records.filter(r => r.status === "cita_domicilio").length;
-  const perdidasCount = perdidas.length;
+  // Lo que ve cada uno: las abiertas + las que el mismo esta atendiendo. Las que tomo otro desaparecen de su lista.
+  const perdidasVisibles = perdidas.filter(p => p.estado === "abierta" || p.tomada_por === user);
+  const perdidasCount = perdidasVisibles.length;
   const myResolved = records.filter(r => r.resuelto_por === user).length;
 
   let tabs = [];
@@ -680,12 +693,16 @@ export default function App() {
         <div className="two">
           <div>
             {devolviendo && (
-              <div style={{ ...S.card, background: C.amberBg, borderColor: "#FCD34D", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: C.amber }}>Devolviendo llamada perdida</div>
-                  <div style={{ fontSize: 13, color: C.amber }}>{fmtTel(devolviendo.telefono)}{devolviendo.nombre_cid ? ` · ${devolviendo.nombre_cid}` : ""} · llamó {devolviendo.veces} {devolviendo.veces === 1 ? "vez" : "veces"}</div>
+              <div style={{ ...S.card, background: C.amberBg, borderColor: "#FCD34D", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.amber }}>Atendiendo llamada perdida{devolviendo.tiene_voicemail ? " · voicemail" : ""}</div>
+                  <div style={{ fontSize: 13, color: C.amber }}>{fmtTel(devolviendo.telefono)}{devolviendo.nombre_cid ? ` · ${devolviendo.nombre_cid}` : ""} · llamó {devolviendo.veces} {devolviendo.veces === 1 ? "vez" : "veces"}{devolviendo.intentos ? ` · ${devolviendo.intentos} ${devolviendo.intentos === 1 ? "intento" : "intentos"} sin contestar` : ""}</div>
                 </div>
-                <button onClick={() => { setDevolviendo(null); setForm(FORM0); setClienteFound(null); setClienteHistory([]); }} style={S.small}>Cancelar</button>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <button onClick={() => noContestoAtendiendo()} style={{ ...S.btn("amber"), padding: "9px 14px", fontSize: 13, width: "auto" }}>{(devolviendo.intentos || 0) >= 2 ? "No contestó · cerrar" : "No contestó"}</button>
+                  <button onClick={() => spamAtendiendo()} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto" }}>Spam</button>
+                  <button onClick={() => cancelarAtendiendo()} style={{ background: "none", border: "none", color: C.amber, fontSize: 13, cursor: "pointer", fontFamily: FONT, padding: "0 4px", textDecoration: "underline" }}>Cancelar</button>
+                </div>
               </div>
             )}
             <div style={S.card}>
@@ -762,8 +779,8 @@ export default function App() {
               <div style={{ fontSize: 13, color: C.muted, minHeight: 18 }}>{sync.msg}</div>
               <button onClick={sincronizar} disabled={sync.busy} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto", opacity: sync.busy ? 0.6 : 1 }}>{sync.busy ? "Revisando..." : "Actualizar"}</button>
             </div>
-            {perdidas.length === 0 && <Empty titulo="Todo devuelto" texto="Cuando entre una llamada perdida o un voicemail aparece aquí y suena un aviso." />}
-            {perdidas.map(p => {
+            {perdidasVisibles.length === 0 && <Empty titulo="Todo devuelto" texto="Cuando entre una llamada perdida o un voicemail aparece aquí y suena un aviso." />}
+            {perdidasVisibles.map(p => {
               const mia = p.tomada_por === user;
               const urgente = (Date.now() - new Date(p.primera_llamada).getTime()) > 15 * 60000 && p.estado === "abierta";
               return (
@@ -775,8 +792,8 @@ export default function App() {
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                         <span style={S.pill(p.tiene_voicemail ? C.violetBg : C.amberBg, p.tiene_voicemail ? C.violet : C.amber)}>{p.tiene_voicemail ? `Voicemail${p.voicemail_seg ? ` · ${p.voicemail_seg}s` : ""}` : "Perdida"}</span>
                         {p.veces > 1 && <span style={S.pill(C.redBg, C.red)}>Llamó {p.veces} veces</span>}
-                        {p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>Intento {p.intentos} de 3</span>}
-                        {p.estado === "tomada" && <span style={S.pill(C.blueBg, C.blue)}>{mia ? "La tienes tú" : `La tiene ${p.tomada_por}`}</span>}
+                        {p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>{p.intentos} {p.intentos === 1 ? "intento" : "intentos"} sin contestar</span>}
+                        {mia && <span style={S.pill(C.greenBg, C.green)}>La estás atendiendo</span>}
                         {p.cola && <span style={S.pill(C.slateBg, C.muted)}>{p.cola.replace("MRY-PR_", "")}</span>}
                       </div>
                       {p.voicemail_url && (
@@ -791,14 +808,9 @@ export default function App() {
                         <div style={{ fontSize: 13, fontWeight: 600, color: urgente ? C.red : C.text }}>{hace(p.ultima_llamada)}</div>
                         <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{fmtDate(p.ultima_llamada)}</div>
                       </div>
-                      <div className="acts3" style={{ gridTemplateColumns: "auto auto auto" }}>
-                        {p.estado === "abierta"
-                          ? <button onClick={() => tomar(p)} style={{ ...S.btn("ghost"), padding: "10px 14px", fontSize: 13, width: "auto" }}>La tomo</button>
-                          : <button onClick={() => soltar(p)} style={{ ...S.btn("ghost"), padding: "10px 14px", fontSize: 13, width: "auto" }}>Soltar</button>}
-                        <button onClick={() => noContestoPerdida(p)} style={{ ...S.btn("amber"), padding: "10px 14px", fontSize: 13, width: "auto" }}>{(p.intentos || 0) >= 2 ? "No contestó · cerrar" : "No contestó"}</button>
-                        <button onClick={() => devolver(p)} style={{ ...S.btn("primary"), padding: "10px 14px", fontSize: 13, width: "auto" }}>Devolver llamada</button>
-                      </div>
-                      <button onClick={() => cerrarPerdida(p, "spam")} style={{ background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer", fontFamily: FONT, padding: 0 }}>Spam / no aplica</button>
+                      {mia
+                        ? <button onClick={() => (devolviendo && devolviendo.id === p.id) ? setTab("llamadas") : devolver(p)} style={{ ...S.btn("ghost"), padding: "11px 18px", fontSize: 14, width: "auto" }}>Continuar</button>
+                        : <button onClick={() => devolver(p)} style={{ ...S.btn("primary"), padding: "11px 18px", fontSize: 14, width: "auto" }}>Atender</button>}
                     </div>
                   </div>
                 </div>
@@ -1080,7 +1092,12 @@ function MetricasHoy({ perdidas, cerradas }) {
   const vm = todas.filter(p => p.tiene_voicemail).length;
   const dev = hoyCe.filter(p => p.resultado === "contestada");
   const prom = dev.length ? Math.round(dev.reduce((a, p) => a + (p.minutos_respuesta || 0), 0) / dev.length) : null;
+  const noCont = hoyCe.filter(p => p.resultado === "no_contesta").length;
   const pct = entraron ? Math.round(dev.length / entraron * 100) : 0;
+  // quien atendio hoy (devueltas por persona + su tiempo promedio)
+  const porPersona = {};
+  hoyCe.forEach(p => { if (!p.cerrada_por) return; const q = porPersona[p.cerrada_por] || (porPersona[p.cerrada_por] = { n: 0, dev: 0, min: 0 }); q.n++; if (p.resultado === "contestada") { q.dev++; q.min += p.minutos_respuesta || 0; } });
+  const personas = Object.entries(porPersona).sort((a, b) => b[1].dev - a[1].dev);
   const Row = ({ l, v }) => <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: `1px solid ${C.slateBg}` }}><span style={{ color: C.text }}>{l}</span><b>{v}</b></div>;
   return (
     <div style={S.card}>
@@ -1088,9 +1105,21 @@ function MetricasHoy({ perdidas, cerradas }) {
       <Row l="Entraron" v={entraron} />
       <Row l="Voicemail" v={vm} />
       <Row l="Devueltas" v={dev.length} />
+      <Row l="No contestaron" v={noCont} />
       <Row l="Tiempo de respuesta" v={prom != null ? `${prom} min` : "—"} />
       <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>{pct}% devueltas</div>
       <div style={{ height: 8, background: C.slateBg, borderRadius: 4, overflow: "hidden", marginTop: 6 }}><div style={{ width: `${pct}%`, height: "100%", background: C.green }} /></div>
+      {personas.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ ...S.label, marginBottom: 6 }}>Quién atendió</div>
+          {personas.map(([n, q]) => (
+            <div key={n} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0" }}>
+              <span>{n}</span>
+              <span style={{ color: C.muted }}><b style={{ color: C.text }}>{q.dev}</b> devuelta{q.dev !== 1 ? "s" : ""}{q.dev ? ` · ${Math.round(q.min / q.dev)} min` : ""}{q.n - q.dev ? ` · ${q.n - q.dev} sin contestar/spam` : ""}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
