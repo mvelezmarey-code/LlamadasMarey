@@ -394,6 +394,17 @@ export default function App() {
     supabase.rpc("metricas_llamadas_perdidas", { p_desde: d, p_hasta: h }).then(({ data }) => setMetricasPerd(Array.isArray(data) ? data[0] : data));
   }, [userData, tab, filters.dash, ranges.dash, perdidas.length, perdidasCerradas.length]);
 
+  const munGroups = useMemo(() => {
+    const g = {};
+    municipios.forEach(m => { const z = m.zona || "Otras áreas"; (g[z] = g[z] || []).push(m); });
+    return g;
+  }, [municipios]);
+  const modelGroups = useMemo(() => {
+    const g = {};
+    modelos.forEach(m => { const k = m.subcategoria ? `${m.categoria} — ${m.subcategoria}` : m.categoria; (g[k] = g[k] || []).push(m); });
+    return g;
+  }, [modelos]);
+
   if (!userData) return <LoginScreen onLogin={(u) => { setUserData(u); setTab(u.rol === "tech" ? "queue" : u.rol === "admin" ? "dashboard" : "llamadas"); }} />;
 
   const user = userData.nombre, role = userData.rol, userId = userData.id;
@@ -550,16 +561,6 @@ export default function App() {
   const tabLabels = { llamadas: "Nueva llamada", perdidas: "Por devolver", queue: "Queue", citas: "Citas", historial: "Historial", dashboard: "Dashboard", stats: "Estadísticas" };
   const tabBadge = { perdidas: perdidasCount, queue: pendingCount, citas: citasCount };
 
-  const munGroups = useMemo(() => {
-    const g = {};
-    municipios.forEach(m => { const z = m.zona || "Otras áreas"; (g[z] = g[z] || []).push(m); });
-    return g;
-  }, [municipios]);
-  const modelGroups = useMemo(() => {
-    const g = {};
-    modelos.forEach(m => { const k = m.subcategoria ? `${m.categoria} — ${m.subcategoria}` : m.categoria; (g[k] = g[k] || []).push(m); });
-    return g;
-  }, [modelos]);
 
   /* =================================================================
      RENDER
