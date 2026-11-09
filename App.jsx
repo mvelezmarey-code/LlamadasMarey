@@ -387,6 +387,23 @@ export default function App() {
 
   useEffect(() => { if (userData) fetchPerdidas(); }, [userData, fetchPerdidas]);
 
+  /* Actualizar: recarga la lista y pide a la funcion que revise en Resend los correos recientes */
+  const [sync, setSync] = useState({ busy: false, msg: "" });
+  async function sincronizar() {
+    setSync({ busy: true, msg: "Revisando correos..." });
+    try {
+      const { data, error } = await supabase.functions.invoke("llamada-perdida", { body: { sync: true } });
+      if (error) throw error;
+      await fetchPerdidas();
+      const extra = data.acumulados ? ` · ${data.acumulados} sumados a un número ya en lista` : "";
+      setSync({ busy: false, msg: `Revisados ${data.revisados} correos · ${data.nuevos} nuevos${extra}${data.errores ? ` · ${data.errores} con error` : ""}` });
+    } catch (e) {
+      await fetchPerdidas();
+      setSync({ busy: false, msg: "Lista actualizada. No se pudo revisar Resend: " + (e?.message || String(e)) });
+    }
+    setTimeout(() => setSync(s => ({ ...s, msg: "" })), 8000);
+  }
+
   useEffect(() => {
     if (!userData) return;
     const ch = supabase.channel("perdidas_rt")
@@ -741,6 +758,10 @@ export default function App() {
       {tab === "perdidas" && (
         <div className="two">
           <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 13, color: C.muted, minHeight: 18 }}>{sync.msg}</div>
+              <button onClick={sincronizar} disabled={sync.busy} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto", opacity: sync.busy ? 0.6 : 1 }}>{sync.busy ? "Revisando..." : "Actualizar"}</button>
+            </div>
             {perdidas.length === 0 && <Empty titulo="Todo devuelto" texto="Cuando entre una llamada perdida o un voicemail aparece aquí y suena un aviso." />}
             {perdidas.map(p => {
               const mia = p.tomada_por === user;
