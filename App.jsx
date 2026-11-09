@@ -115,7 +115,34 @@ function GlobalCss() {
       button:active { transform: translateY(1px); }
       @keyframes bajar { from { transform: translateY(-16px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
       @keyframes latir { 0%,100% { box-shadow: 0 0 0 0 rgba(185,28,28,.35) } 50% { box-shadow: 0 0 0 8px rgba(185,28,28,0) } }
-      .tabs::-webkit-scrollbar { display: none; }
+      .shell { display: grid; grid-template-columns: 232px minmax(0,1fr); min-height: 100vh; }
+      .side { background: ${C.navy}; color: #fff; padding: 22px 16px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+      .main { min-width: 0; display: flex; flex-direction: column; }
+      .topbar { position: sticky; top: 0; z-index: 20; background: #fff; border-bottom: 1px solid ${C.line}; height: 64px; display: flex; align-items: center; gap: 14px; padding: 0 24px; }
+      .content { padding: 22px 24px 60px; max-width: 1180px; width: 100%; margin: 0 auto; }
+      .two { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 20px; align-items: start; }
+      .sticky { position: sticky; top: 84px; }
+      .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .mtabs { display: none; }
+      .solo-movil { display: none; }
+      .nav-a { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 11px 12px; border-radius: 10px; font-size: 14px; font-weight: 600; color: rgba(255,255,255,.78); background: transparent; border: none; cursor: pointer; margin-bottom: 4px; font-family: ${FONT}; text-align: left; }
+      .nav-a.on { background: rgba(255,255,255,.12); color: #fff; }
+      .nav-n { min-width: 22px; height: 22px; border-radius: 11px; background: rgba(255,255,255,.18); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
+      .nav-n.red { background: #EF4444; }
+      .acts3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      @media (max-width: 899px) {
+        .shell { grid-template-columns: 1fr; }
+        .side { display: none; }
+        .mtabs { display: flex; gap: 6px; overflow-x: auto; padding: 10px 16px 8px; background: #fff; border-bottom: 1px solid ${C.line}; position: sticky; top: 64px; z-index: 19; }
+        .mtabs::-webkit-scrollbar { display: none; }
+        .topbar { padding: 0 16px; }
+        .content { padding: 16px 16px 60px; }
+        .two { grid-template-columns: 1fr; }
+        .sticky { position: static; }
+        .row2 { grid-template-columns: 1fr; }
+        .acts3 { grid-template-columns: 1fr 1fr; }
+        .solo-movil { display: inline-block; }
+      }
     `}</style>
   );
 }
@@ -565,177 +592,219 @@ export default function App() {
   /* =================================================================
      RENDER
      ================================================================= */
+  const hoyRecs = records.filter(r => isToday(r.created_at));
+  const hoyMias = hoyRecs.filter(r => r.registrado_por === user || r.resuelto_por === user).length;
+  const hoyResueltas = hoyRecs.filter(r => r.status === "atendido_resuelto").length;
+  const rolTxt = role === "admin" ? "Administración" : role === "tech" ? "Técnico" : "Servicio al cliente";
+
+  const Nav = ({ mobile }) => tabs.map(t => {
+    const n = tabBadge[t] || 0, on = tab === t;
+    if (mobile) return (
+      <button key={t} onClick={() => setTab(t)} style={{ padding: "9px 14px", borderRadius: 999, border: `1px solid ${on ? C.navy : C.line}`, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", background: on ? C.navy : "#fff", color: on ? "#fff" : C.text, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 8 }}>
+        {tabLabels[t]}{n > 0 && <span style={{ minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10, fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", background: t === "perdidas" ? C.red : (on ? "rgba(255,255,255,.25)" : C.slateBg), color: t === "perdidas" || on ? "#fff" : C.text }}>{n}</span>}
+      </button>
+    );
+    return (
+      <button key={t} className={`nav-a${on ? " on" : ""}`} onClick={() => setTab(t)}>
+        <span>{tabLabels[t]}</span>{n > 0 && <span className={`nav-n${t === "perdidas" ? " red" : ""}`}>{n}</span>}
+      </button>
+    );
+  });
+
+  const Banner = () => aviso && (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 12, background: C.navyDark, color: "#fff", animation: "bajar .25s ease-out", maxWidth: 520, minWidth: 0 }}>
+      <div style={{ width: 9, height: 9, borderRadius: 5, background: "#F87171", animation: "latir 1.4s infinite", flexShrink: 0 }} />
+      <div style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <b>{aviso.tiene_voicemail ? "Voicemail" : aviso.tipo === "repite" ? `Volvió a llamar (${aviso.veces})` : "Llamada perdida"}</b> · {fmtTel(aviso.telefono)}{aviso.nombre_cid ? ` · ${aviso.nombre_cid}` : ""}
+      </div>
+      <button onClick={() => { setTab("perdidas"); setAviso(null); }} style={{ ...S.small, background: "#fff", color: C.navy, border: "none", padding: "5px 10px" }}>Ver</button>
+      <button onClick={() => setAviso(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.7)", fontSize: 18, cursor: "pointer", padding: "0 2px" }}>×</button>
+    </div>
+  );
+
   return (
-    <div style={S.page}>
+    <div className="shell" style={{ fontFamily: FONT, color: C.ink }}>
       <GlobalCss />
 
-      {/* header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0 12px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 11, background: C.navy, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 16, fontWeight: 800 }}>M</div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.1 }}>{user}</div>
-            <div style={{ fontSize: 12, color: C.muted }}>{role === "admin" ? "Administración" : role === "tech" ? "Técnico" : "Servicio al cliente"}{myResolved > 0 ? ` · ${myResolved} atendidas` : ""}</div>
-          </div>
+      {/* ---- menu lateral (computadora) ---- */}
+      <aside className="side">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 26 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: "#fff", color: C.navy, fontWeight: 900, display: "grid", placeItems: "center" }}>M</div>
+          <div><div style={{ fontSize: 15, fontWeight: 700 }}>MareyApp</div><div style={{ fontSize: 11, opacity: .7 }}>{rolTxt}</div></div>
         </div>
-        <button onClick={logout} style={S.small}>Salir</button>
-      </div>
-
-      {/* banner de llamada perdida */}
-      {aviso && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, background: C.navyDark, color: "#fff", marginBottom: 12, animation: "bajar .25s ease-out", boxShadow: "0 10px 30px rgba(15,36,56,.25)" }}>
-          <div style={{ width: 10, height: 10, borderRadius: 5, background: "#F87171", animation: "latir 1.4s infinite", flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>{aviso.tiene_voicemail ? "Voicemail nuevo" : aviso.tipo === "repite" ? `Volvió a llamar (${aviso.veces} veces)` : "Llamada perdida"}</div>
-            <div style={{ fontSize: 13, opacity: .85, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtTel(aviso.telefono)}{aviso.nombre_cid ? ` · ${aviso.nombre_cid}` : ""}</div>
-          </div>
-          <button onClick={() => { setTab("perdidas"); setAviso(null); }} style={{ ...S.small, background: "#fff", color: C.navy, border: "none" }}>Ver</button>
-          <button onClick={() => setAviso(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.7)", fontSize: 18, cursor: "pointer", padding: "0 4px" }}>×</button>
+        <nav><Nav /></nav>
+        <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 10, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,.14)" }}>
+          <div style={{ width: 34, height: 34, borderRadius: 17, background: "#d98a1f", display: "grid", placeItems: "center", fontWeight: 800 }}>{user[0]}</div>
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 700, fontSize: 14 }}>{user}</div><div style={{ fontSize: 11, opacity: .7 }}>{myResolved} atendidas</div></div>
+          <button onClick={logout} style={{ background: "none", border: "none", color: "rgba(255,255,255,.7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Salir</button>
         </div>
-      )}
+      </aside>
 
-      {/* tabs */}
-      <div className="tabs" style={{ display: "flex", gap: 6, marginBottom: 20, overflowX: "auto", paddingBottom: 2 }}>
-        {tabs.map(t => {
-          const n = tabBadge[t] || 0;
-          const on = tab === t;
-          return (
-            <button key={t} onClick={() => setTab(t)} style={{ padding: "10px 14px", borderRadius: 999, border: `1px solid ${on ? C.navy : C.line}`, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", background: on ? C.navy : "#fff", color: on ? "#fff" : C.text, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 8 }}>
-              {tabLabels[t]}
-              {n > 0 && <span style={{ minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10, fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", background: t === "perdidas" ? C.red : (on ? "rgba(255,255,255,.25)" : C.slateBg), color: t === "perdidas" ? "#fff" : (on ? "#fff" : C.text) }}>{n}</span>}
-            </button>
-          );
-        })}
-      </div>
+      <div className="main">
+        {/* ---- barra superior ---- */}
+        <div className="topbar">
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <div className="mtabs-logo" style={{ width: 30, height: 30, borderRadius: 9, background: C.navy, color: "#fff", fontWeight: 900, display: "grid", placeItems: "center", fontSize: 13 }}>M</div>
+            <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: -0.2, whiteSpace: "nowrap" }}>{tabLabels[tab]}</div>
+          </div>
+          <div style={{ flex: 1 }} />
+          <Banner />
+          <button onClick={logout} className="solo-movil" style={S.small}>Salir</button>
+        </div>
+        {/* ---- pestanas (celular) ---- */}
+        <div className="mtabs"><Nav mobile /></div>
+
+        <div className="content">
 
       {/* ============ NUEVA LLAMADA ============ */}
       {tab === "llamadas" && (
-        <div>
-          {devolviendo && (
-            <div style={{ ...S.card, background: C.amberBg, borderColor: "#FCD34D", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>Devolviendo llamada perdida</div>
-                <div style={{ fontSize: 13, color: C.amber }}>{fmtTel(devolviendo.telefono)}{devolviendo.nombre_cid ? ` · ${devolviendo.nombre_cid}` : ""} · llamó {devolviendo.veces} {devolviendo.veces === 1 ? "vez" : "veces"}</div>
+        <div className="two">
+          <div>
+            {devolviendo && (
+              <div style={{ ...S.card, background: C.amberBg, borderColor: "#FCD34D", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>Devolviendo llamada perdida</div>
+                  <div style={{ fontSize: 13, color: C.amber }}>{fmtTel(devolviendo.telefono)}{devolviendo.nombre_cid ? ` · ${devolviendo.nombre_cid}` : ""} · llamó {devolviendo.veces} {devolviendo.veces === 1 ? "vez" : "veces"}</div>
+                </div>
+                <button onClick={() => { setDevolviendo(null); setForm(FORM0); setClienteFound(null); setClienteHistory([]); }} style={S.small}>Cancelar</button>
               </div>
-              <button onClick={() => { setDevolviendo(null); setForm(FORM0); setClienteFound(null); setClienteHistory([]); }} style={S.small}>Cancelar</button>
-            </div>
-          )}
-          <div style={S.card}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
+            )}
+            <div style={S.card}>
+              <div style={{ marginBottom: 16 }}>
                 <label style={S.label}>Teléfono</label>
-                <input style={S.input} value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} onBlur={e => searchPhone(e.target.value)} placeholder="787-000-0000" inputMode="tel" />
-                {searching && <div style={{ ...S.sub, marginTop: 6 }}>Buscando...</div>}
+                <div style={{ position: "relative" }}>
+                  <input style={{ ...S.input, fontSize: 24, fontWeight: 800, letterSpacing: .5, height: 58, paddingRight: clienteFound ? 200 : 14 }} value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} onBlur={e => searchPhone(e.target.value)} placeholder="787-000-0000" inputMode="tel" autoFocus />
+                  {searching && <span style={{ position: "absolute", right: 14, top: 20, fontSize: 12, color: C.faint }}>Buscando...</span>}
+                  {!searching && clienteFound && <span style={{ position: "absolute", right: 12, top: 15, ...S.pill(C.greenBg, C.green), padding: "6px 10px" }}>Cliente conocido · {clienteHistory.length} llamada{clienteHistory.length !== 1 ? "s" : ""}</span>}
+                </div>
               </div>
               {clienteFound && (
-                <div style={{ padding: "12px 14px", borderRadius: 12, background: C.greenBg }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Cliente conocido · {clienteHistory.length} llamada{clienteHistory.length !== 1 ? "s" : ""} previa{clienteHistory.length !== 1 ? "s" : ""}</div>
-                  {clienteFound.direccion && <div style={{ fontSize: 13, color: C.green, marginTop: 2 }}>{clienteFound.direccion}</div>}
-                  {clienteHistory.slice(0, 5).map(h => (
-                    <div key={h.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: C.green, padding: "6px 0", borderTop: "1px solid rgba(22,101,52,.15)" }}>
+                <div style={{ padding: "12px 14px", borderRadius: 12, background: "#F0FDF4", border: "1px solid #BBF7D0", marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{clienteFound.nombre}{clienteHistory[0]?.municipio ? ` · ${clienteHistory[0].municipio}` : ""}{clienteHistory[0]?.modelo ? ` · ${clienteHistory[0].modelo}` : ""}</div>
+                  {clienteFound.direccion && <div style={{ fontSize: 12, color: C.green, marginTop: 2 }}>{clienteFound.direccion}</div>}
+                  {clienteHistory.slice(0, 4).map(h => (
+                    <div key={h.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: C.green, padding: "6px 0 0" }}>
                       <span>{fmtDate(h.created_at)} — {h.problema || "Sin problema"}</span><Badge status={h.status} centro={h.centro_dirigido} />
                     </div>
                   ))}
                 </div>
               )}
-              <div><label style={S.label}>Nombre</label><input style={S.input} value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Nombre del cliente" /></div>
-              <SearchSelect label="Pueblo" value={form.municipio_id} onChange={v => setForm({ ...form, municipio_id: v })} groups={munGroups} placeholder="Escribe para buscar pueblo" />
-              <SearchSelect label="Modelo" value={form.modelo_id} onChange={v => setForm({ ...form, modelo_id: v })} groups={modelGroups} placeholder="Escribe para buscar modelo" />
-              <div>
-                <label style={S.label}>Tiempo con la unidad</label>
-                <select style={{ ...S.input, appearance: "auto", cursor: "pointer" }} value={form.antiguedad_id} onChange={e => setForm({ ...form, antiguedad_id: e.target.value })}>
-                  <option value="">Seleccionar</option>
-                  {antiguedadList.map(a => <option key={a.id} value={a.id}>{a.rango}</option>)}
-                </select>
+              <div className="row2">
+                <div><label style={S.label}>Nombre</label><input style={S.input} value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Nombre del cliente" /></div>
+                <SearchSelect label="Pueblo" value={form.municipio_id} onChange={v => setForm({ ...form, municipio_id: v })} groups={munGroups} placeholder="Escribe para buscar pueblo" />
+                <SearchSelect label="Modelo" value={form.modelo_id} onChange={v => setForm({ ...form, modelo_id: v })} groups={modelGroups} placeholder="Escribe para buscar modelo" />
+                <div>
+                  <label style={S.label}>Tiempo con la unidad</label>
+                  <select style={{ ...S.input, appearance: "auto", cursor: "pointer" }} value={form.antiguedad_id} onChange={e => setForm({ ...form, antiguedad_id: e.target.value })}>
+                    <option value="">Seleccionar</option>
+                    {antiguedadList.map(a => <option key={a.id} value={a.id}>{a.rango}</option>)}
+                  </select>
+                </div>
               </div>
-              <div><label style={S.label}>Problema</label><input style={S.input} value={form.problema} onChange={e => setForm({ ...form, problema: e.target.value })} placeholder="Breve descripción" /></div>
+              <div style={{ marginTop: 14 }}><label style={S.label}>Problema</label><input style={S.input} value={form.problema} onChange={e => setForm({ ...form, problema: e.target.value })} placeholder="Breve descripción" /></div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 18 }}>
+                <Stat label="Llamadas hoy" value={hoyRecs.length} tone="slate" />
+                <Stat label="Resueltas hoy" value={hoyResueltas} tone="slate" />
+                <Stat label="Por devolver" value={perdidasCount} tone={perdidasCount > 0 ? "amber" : "slate"} />
+              </div>
             </div>
           </div>
 
-          {canSave && !saved && (
-            <div style={S.card}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>¿Qué pasó con la llamada?</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <button onClick={() => saveCallWith("dirigido", "San Juan")} style={S.btn("green")}>Enviado a San Juan</button>
-                <button onClick={() => saveCallWith("dirigido", "San Germán")} style={S.btn("blue")}>Enviado a San Germán</button>
-                <button onClick={() => saveCallWith("pendiente_willy", null)} style={S.btn("amber")}>Referido a técnicos</button>
-                <button onClick={() => saveCallWith("atendido_resuelto", null)} style={S.btn("primary")}>Se resolvió</button>
-              </div>
+          <div className="sticky">
+            <div style={{ ...S.card, padding: 16 }}>
+              <div style={{ ...S.label, marginBottom: 12 }}>¿Qué pasó con la llamada?</div>
+              {saved ? (
+                <div style={{ padding: "22px 10px", borderRadius: 12, background: C.greenBg, color: C.green, fontWeight: 800, textAlign: "center", fontSize: 16 }}>Guardado</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[
+                    ["Se resolvió", "por teléfono", "primary", () => saveCallWith("atendido_resuelto", null)],
+                    ["Enviado a San Juan", "", "green", () => saveCallWith("dirigido", "San Juan")],
+                    ["Enviado a San Germán", "", "blue", () => saveCallWith("dirigido", "San Germán")],
+                    ["Referido a técnicos", "entra al Queue", "amber", () => saveCallWith("pendiente_willy", null)],
+                  ].map(([t, sub, kind, fn]) => (
+                    <button key={t} onClick={fn} disabled={!canSave} style={{ ...S.btn(canSave ? kind : "disabled"), height: 56, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>{t}</span>{sub && <span style={{ fontSize: 11, fontWeight: 600, opacity: .8 }}>{sub}</span>}
+                    </button>
+                  ))}
+                  <div style={{ fontSize: 12, color: C.faint, textAlign: "center", marginTop: 2 }}>{canSave ? "Toca una para guardar" : "Se activan cuando el formulario está completo"}</div>
+                </div>
+              )}
             </div>
-          )}
-          {saved && <div style={{ ...S.card, textAlign: "center", color: C.green, fontWeight: 700, background: C.greenBg, borderColor: C.greenBg }}>Guardado</div>}
+          </div>
         </div>
       )}
 
       {/* ============ POR DEVOLVER (llamadas perdidas) ============ */}
       {tab === "perdidas" && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <div style={S.h2}>Por devolver</div>
-            <div style={S.sub}>{perdidas.length === 0 ? "Nada pendiente" : `${perdidas.length} pendiente${perdidas.length !== 1 ? "s" : ""}`}</div>
+        <div className="two">
+          <div>
+            {perdidas.length === 0 && <Empty titulo="Todo devuelto" texto="Cuando entre una llamada perdida o un voicemail aparece aquí y suena un aviso." />}
+            {perdidas.map(p => {
+              const mia = p.tomada_por === user;
+              const urgente = (Date.now() - new Date(p.primera_llamada).getTime()) > 15 * 60000 && p.estado === "abierta";
+              return (
+                <div key={p.id} style={{ ...S.card, borderColor: urgente ? "#FCA5A5" : C.line }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.3 }}>{fmtTel(p.telefono)}</div>
+                      {p.nombre_cid && <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{p.nombre_cid}</div>}
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                        <span style={S.pill(p.tiene_voicemail ? C.violetBg : C.amberBg, p.tiene_voicemail ? C.violet : C.amber)}>{p.tiene_voicemail ? `Voicemail${p.voicemail_seg ? ` · ${p.voicemail_seg}s` : ""}` : "Perdida"}</span>
+                        {p.veces > 1 && <span style={S.pill(C.redBg, C.red)}>Llamó {p.veces} veces</span>}
+                        {p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>Intento {p.intentos} de 3</span>}
+                        {p.estado === "tomada" && <span style={S.pill(C.blueBg, C.blue)}>{mia ? "La tienes tú" : `La tiene ${p.tomada_por}`}</span>}
+                        {p.cola && <span style={S.pill(C.slateBg, C.muted)}>{p.cola.replace("MRY-PR_", "")}</span>}
+                      </div>
+                      {p.voicemail_url && (
+                        <div style={{ marginTop: 10, maxWidth: 380 }}>
+                          {audioUrls[p.id] ? <audio controls src={audioUrls[p.id]} style={{ width: "100%", height: 36 }} /> :
+                            <button onClick={() => urlAudio(p)} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto" }}>Escuchar voicemail</button>}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: urgente ? C.red : C.text }}>{hace(p.ultima_llamada)}</div>
+                        <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{fmtDate(p.ultima_llamada)}</div>
+                      </div>
+                      <div className="acts3" style={{ gridTemplateColumns: "auto auto auto" }}>
+                        {p.estado === "abierta"
+                          ? <button onClick={() => tomar(p)} style={{ ...S.btn("ghost"), padding: "10px 14px", fontSize: 13, width: "auto" }}>La tomo</button>
+                          : <button onClick={() => soltar(p)} style={{ ...S.btn("ghost"), padding: "10px 14px", fontSize: 13, width: "auto" }}>Soltar</button>}
+                        <button onClick={() => noContestoPerdida(p)} style={{ ...S.btn("amber"), padding: "10px 14px", fontSize: 13, width: "auto" }}>{(p.intentos || 0) >= 2 ? "No contestó · cerrar" : "No contestó"}</button>
+                        <button onClick={() => devolver(p)} style={{ ...S.btn("primary"), padding: "10px 14px", fontSize: 13, width: "auto" }}>Devolver llamada</button>
+                      </div>
+                      <button onClick={() => cerrarPerdida(p, "spam")} style={{ background: "none", border: "none", color: C.faint, fontSize: 12, cursor: "pointer", fontFamily: FONT, padding: 0 }}>Spam / no aplica</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {perdidasCerradas.length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <div style={{ ...S.label, marginBottom: 10 }}>Devueltas · últimos 7 días</div>
+                {perdidasCerradas.map(p => {
+                  const res = { contestada: ["Devuelta", C.greenBg, C.green], no_contesta: ["No contestó", C.redBg, C.red], spam: ["Spam", C.slateBg, C.text], no_aplica: ["No aplica", C.slateBg, C.text] }[p.resultado] || [p.resultado, C.slateBg, C.text];
+                  return (
+                    <div key={p.id} style={{ ...S.card, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                      <div style={{ fontSize: 13 }}><b>{fmtTel(p.telefono)}</b> <span style={{ color: C.muted }}>· {p.cerrada_por || "—"}{p.minutos_respuesta != null ? ` · ${Math.round(p.minutos_respuesta)} min` : ""}{p.intentos ? ` · ${p.intentos} intentos` : ""} · {fmtDate(p.cerrada_at)}</span></div>
+                      <span style={S.pill(res[1], res[2])}>{res[0]}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {perdidas.length === 0 && <Empty titulo="Todo devuelto" texto="Cuando entre una llamada perdida o un voicemail aparece aquí y suena un aviso." />}
-
-          {perdidas.map(p => {
-            const mia = p.tomada_por === user;
-            const urgente = (Date.now() - new Date(p.primera_llamada).getTime()) > 15 * 60000 && p.estado === "abierta";
-            return (
-              <div key={p.id} style={{ ...S.card, borderColor: urgente ? "#FCA5A5" : C.line }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3 }}>{fmtTel(p.telefono)}</div>
-                    {p.nombre_cid && <div style={{ fontSize: 13, color: C.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nombre_cid}</div>}
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                      <span style={S.pill(p.tiene_voicemail ? C.violetBg : C.amberBg, p.tiene_voicemail ? C.violet : C.amber)}>{p.tiene_voicemail ? "Voicemail" : "Perdida"}</span>
-                      {p.veces > 1 && <span style={S.pill(C.redBg, C.red)}>Llamó {p.veces} veces</span>}
-                      {p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>Intento {p.intentos} de 3</span>}
-                      {p.estado === "tomada" && <span style={S.pill(C.blueBg, C.blue)}>{mia ? "La tienes tú" : `La tiene ${p.tomada_por}`}</span>}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: urgente ? C.red : C.text }}>{hace(p.ultima_llamada)}</div>
-                    <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{fmtDate(p.ultima_llamada)}</div>
-                  </div>
-                </div>
-
-                {p.voicemail_url && (
-                  <div style={{ marginTop: 12 }}>
-                    {audioUrls[p.id] ? <audio controls src={audioUrls[p.id]} style={{ width: "100%" }} /> :
-                      <button onClick={() => urlAudio(p)} style={S.btn("ghost")}>Escuchar voicemail{p.voicemail_seg ? ` (${p.voicemail_seg}s)` : ""}</button>}
-                  </div>
-                )}
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 14 }}>
-                  {p.estado === "abierta"
-                    ? <button onClick={() => tomar(p)} style={S.btn("ghost")}>La tomo</button>
-                    : <button onClick={() => soltar(p)} style={S.btn("ghost")}>Soltar</button>}
-                  <button onClick={() => devolver(p)} style={S.btn("primary")}>Devolver llamada</button>
-                  <button onClick={() => noContestoPerdida(p)} style={S.btn("amber")}>{(p.intentos || 0) >= 2 ? "No contestó · cerrar" : "No contestó"}</button>
-                  <button onClick={() => cerrarPerdida(p, "spam")} style={S.btn("ghost")}>Spam / no aplica</button>
-                </div>
-                {p.cola && <div style={{ fontSize: 11, color: C.faint, marginTop: 10 }}>Cola {p.cola}{p.cola_ext ? ` (${p.cola_ext})` : ""}</div>}
-              </div>
-            );
-          })}
-
-          {perdidasCerradas.length > 0 && (
-            <div style={{ marginTop: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: .4, marginBottom: 10 }}>Devueltas · últimos 7 días</div>
-              {perdidasCerradas.map(p => {
-                const res = { contestada: ["Devuelta", C.greenBg, C.green], no_contesta: ["No contestó", C.redBg, C.red], spam: ["Spam", C.slateBg, C.text], no_aplica: ["No aplica", C.slateBg, C.text] }[p.resultado] || [p.resultado, C.slateBg, C.text];
-                return (
-                  <div key={p.id} style={{ ...S.card, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700 }}>{fmtTel(p.telefono)}</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>{p.cerrada_por || "—"} · {p.minutos_respuesta != null ? `${Math.round(p.minutos_respuesta)} min` : ""} · {fmtDate(p.cerrada_at)}</div>
-                    </div>
-                    <span style={S.pill(res[1], res[2])}>{res[0]}</span>
-                  </div>
-                );
-              })}
+          <div className="sticky">
+            <MetricasHoy perdidas={perdidas} cerradas={perdidasCerradas} />
+            <div style={{ ...S.card }}>
+              <div style={{ ...S.label, marginBottom: 8 }}>Regla</div>
+              <div style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>Una sola fila por número. Si vuelve a llamar o deja voicemail, se suma a la misma. Se cierra al registrar la llamada devuelta, o a los 3 intentos sin contestar.</div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -973,6 +1042,32 @@ export default function App() {
           })()}
         </div>
       )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- metricas del dia (columna derecha de Por devolver) ---------- */
+function MetricasHoy({ perdidas, cerradas }) {
+  const hoyAb = perdidas.filter(p => isToday(p.primera_llamada));
+  const hoyCe = cerradas.filter(p => isToday(p.primera_llamada));
+  const todas = [...hoyAb, ...hoyCe];
+  const entraron = todas.length;
+  const vm = todas.filter(p => p.tiene_voicemail).length;
+  const dev = hoyCe.filter(p => p.resultado === "contestada");
+  const prom = dev.length ? Math.round(dev.reduce((a, p) => a + (p.minutos_respuesta || 0), 0) / dev.length) : null;
+  const pct = entraron ? Math.round(dev.length / entraron * 100) : 0;
+  const Row = ({ l, v }) => <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: `1px solid ${C.slateBg}` }}><span style={{ color: C.text }}>{l}</span><b>{v}</b></div>;
+  return (
+    <div style={S.card}>
+      <div style={{ ...S.label, marginBottom: 6 }}>Hoy</div>
+      <Row l="Entraron" v={entraron} />
+      <Row l="Voicemail" v={vm} />
+      <Row l="Devueltas" v={dev.length} />
+      <Row l="Tiempo de respuesta" v={prom != null ? `${prom} min` : "—"} />
+      <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>{pct}% devueltas</div>
+      <div style={{ height: 8, background: C.slateBg, borderRadius: 4, overflow: "hidden", marginTop: 6 }}><div style={{ width: `${pct}%`, height: "100%", background: C.green }} /></div>
     </div>
   );
 }
