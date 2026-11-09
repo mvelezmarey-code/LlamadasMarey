@@ -17,7 +17,7 @@ const C = {
   green: "#166534", greenBg: "#DCFCE7", red: "#B91C1C", redBg: "#FEE2E2", blue: "#1D4ED8", blueBg: "#DBEAFE",
   violet: "#5B21B6", violetBg: "#EDE9FE", slateBg: "#F1F5F9"
 };
-const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif";
+const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 const EMAIL_MAP = {
   Carlos: "carlos@marey.local", Anthony: "anthony@marey.local", Luis: "luis@marey.local",
@@ -37,14 +37,14 @@ const STATUS = {
 /* ---------- estilos base ---------- */
 const S = {
   page: { maxWidth: 640, margin: "0 auto", padding: "0 16px 48px", fontFamily: FONT, color: C.ink },
-  card: { background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, marginBottom: 12, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" },
-  input: { width: "100%", boxSizing: "border-box", padding: "13px 14px", borderRadius: 12, border: `1px solid ${C.line}`, fontSize: 16, background: "#fff", color: C.ink, outline: "none", fontFamily: FONT },
-  label: { display: "block", fontSize: 12, fontWeight: 600, color: C.muted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 },
-  h2: { fontSize: 20, fontWeight: 700, margin: "4px 0 14px", letterSpacing: -0.2 },
+  card: { background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 12, boxShadow: "none" },
+  input: { width: "100%", boxSizing: "border-box", padding: "11px 13px", borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 15, fontWeight: 400, background: "#fff", color: C.ink, outline: "none", fontFamily: FONT },
+  label: { display: "block", fontSize: 11, fontWeight: 500, color: C.muted, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 },
+  h2: { fontSize: 17, fontWeight: 600, margin: "4px 0 14px" },
   sub: { fontSize: 13, color: C.muted },
-  pill: (bg, color) => ({ display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: bg, color }),
+  pill: (bg, color) => ({ display: "inline-block", padding: "2px 9px", borderRadius: 999, fontSize: 11.5, fontWeight: 500, background: bg, color }),
   btn: (kind = "primary") => {
-    const base = { width: "100%", padding: "14px 18px", borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", border: "1px solid transparent", fontFamily: FONT, transition: "transform .05s" };
+    const base = { width: "100%", padding: "12px 16px", borderRadius: 10, fontSize: 14, fontWeight: 500, cursor: "pointer", border: "1px solid transparent", fontFamily: FONT, transition: "transform .05s" };
     if (kind === "primary") return { ...base, background: C.navy, color: "#fff" };
     if (kind === "ghost") return { ...base, background: "#fff", color: C.text, border: `1px solid ${C.line}` };
     if (kind === "danger") return { ...base, background: C.redBg, color: C.red };
@@ -55,7 +55,7 @@ const S = {
     if (kind === "disabled") return { ...base, background: C.slateBg, color: C.faint, cursor: "not-allowed" };
     return base;
   },
-  small: { padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${C.line}`, background: "#fff", color: C.text, fontFamily: FONT }
+  small: { padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", border: `1px solid ${C.line}`, background: "#fff", color: C.text, fontFamily: FONT }
 };
 
 /* ---------- utilidades ---------- */
@@ -110,7 +110,9 @@ function beep() {
 function GlobalCss() {
   return (
     <style>{`
-      body { background: ${C.bg}; margin: 0; }
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+      body { background: ${C.bg}; margin: 0; font-family: ${FONT}; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv11', 'ss01', 'tnum'; }
+      * { letter-spacing: -0.01em; }
       input:focus, select:focus, textarea:focus { border-color: ${C.navy} !important; box-shadow: 0 0 0 3px rgba(22,50,79,0.12); }
       button:active { transform: translateY(1px); }
       @keyframes bajar { from { transform: translateY(-16px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
@@ -118,15 +120,15 @@ function GlobalCss() {
       .shell { display: grid; grid-template-columns: 232px minmax(0,1fr); min-height: 100vh; }
       .side { background: ${C.navy}; color: #fff; padding: 22px 16px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
       .main { min-width: 0; display: flex; flex-direction: column; }
-      .topbar { position: sticky; top: 0; z-index: 20; background: #fff; border-bottom: 1px solid ${C.line}; height: 64px; display: flex; align-items: center; gap: 14px; padding: 0 24px; }
+      .topbar { position: sticky; top: 0; z-index: 20; background: #fff; border-bottom: 1px solid ${C.line}; height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 24px; }
       .content { padding: 22px 24px 60px; max-width: 1180px; width: 100%; margin: 0 auto; }
       .two { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 20px; align-items: start; }
-      .sticky { position: sticky; top: 84px; }
+      .sticky { position: sticky; top: 76px; }
       .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
       .mtabs { display: none; }
       .solo-movil { display: none; }
-      .nav-a { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 11px 12px; border-radius: 10px; font-size: 14px; font-weight: 600; color: rgba(255,255,255,.78); background: transparent; border: none; cursor: pointer; margin-bottom: 4px; font-family: ${FONT}; text-align: left; }
-      .nav-a.on { background: rgba(255,255,255,.12); color: #fff; }
+      .nav-a { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: rgba(255,255,255,.78); background: transparent; border: none; cursor: pointer; margin-bottom: 4px; font-family: ${FONT}; text-align: left; }
+      .nav-a.on { background: rgba(255,255,255,.12); color: #fff; font-weight: 600; }
       .nav-n { min-width: 22px; height: 22px; border-radius: 11px; background: rgba(255,255,255,.18); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
       .nav-n.red { background: #EF4444; }
       .acts3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -156,7 +158,7 @@ function Badge({ status, centro }) {
 function Empty({ titulo, texto }) {
   return (
     <div style={{ ...S.card, textAlign: "center", padding: "44px 20px" }}>
-      <div style={{ fontSize: 17, fontWeight: 700, color: C.ink }}>{titulo}</div>
+      <div style={{ fontSize: 17, fontWeight: 600, color: C.ink }}>{titulo}</div>
       {texto && <div style={{ ...S.sub, marginTop: 6 }}>{texto}</div>}
     </div>
   );
@@ -167,8 +169,8 @@ function Stat({ label, value, tone = "navy", sub }) {
   const light = tone === "slate";
   return (
     <div style={{ padding: "16px 12px", borderRadius: 14, background: bg, textAlign: "center" }}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: light ? C.ink : "#fff", lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11, fontWeight: 600, color: light ? C.muted : "rgba(255,255,255,.85)", marginTop: 6, letterSpacing: .2 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 600, color: light ? C.ink : "#fff", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      <div style={{ fontSize: 11, fontWeight: 500, color: light ? C.muted : "rgba(255,255,255,.85)", marginTop: 6 }}>{label}</div>
       {sub && <div style={{ fontSize: 11, color: light ? C.faint : "rgba(255,255,255,.7)", marginTop: 2 }}>{sub}</div>}
     </div>
   );
@@ -233,7 +235,7 @@ function SearchSelect({ label, value, onChange, groups, placeholder }) {
           {Object.keys(filtered).length === 0 ? <div style={{ padding: 14, color: C.faint, fontSize: 14 }}>No se encontró</div> :
             Object.entries(filtered).map(([g, items]) => (
               <div key={g}>
-                <div style={{ padding: "8px 14px 4px", fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: .4, background: "#FAFAFA" }}>{g}</div>
+                <div style={{ padding: "8px 14px 4px", fontSize: 11, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: .4, background: "#FAFAFA" }}>{g}</div>
                 {items.map(item => (
                   <div key={item.id} onClick={() => { onChange(String(item.id)); setSelectedLabel(item.nombre); setSearch(""); setOpen(false); }} style={{ padding: "11px 14px", cursor: "pointer", fontSize: 15 }}
                     onMouseEnter={e => e.currentTarget.style.background = C.slateBg} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>{item.nombre}</div>
@@ -255,8 +257,8 @@ function LoginScreen({ onLogin }) {
 
   const Logo = () => (
     <div style={{ textAlign: "center", marginBottom: 32 }}>
-      <div style={{ width: 56, height: 56, borderRadius: 16, background: C.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 24, fontWeight: 800, marginBottom: 14 }}>M</div>
-      <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.2 }}>Marey Service Center</div>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: C.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 24, fontWeight: 600, marginBottom: 14 }}>M</div>
+      <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: -0.2 }}>Marey Service Center</div>
       <div style={S.sub}>Registro de llamadas</div>
     </div>
   );
@@ -287,11 +289,11 @@ function LoginScreen({ onLogin }) {
   return (
     <div style={{ ...S.page, maxWidth: 380, paddingTop: 64 }}><GlobalCss /><Logo />
       <div style={{ textAlign: "center", marginBottom: 22 }}>
-        <div style={{ fontSize: 18, fontWeight: 700 }}>Hola, {name}</div>
+        <div style={{ fontSize: 18, fontWeight: 600 }}>Hola, {name}</div>
         <div style={S.sub}>{loading ? "Verificando..." : "Entra tu PIN"}</div>
       </div>
       <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 20 }}>
-        {[0, 1, 2, 3].map(i => <div key={i} style={{ width: 52, height: 58, borderRadius: 12, border: `1px solid ${pinError ? C.red : C.line}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, background: "#fff" }}>{pin[i] ? "•" : ""}</div>)}
+        {[0, 1, 2, 3].map(i => <div key={i} style={{ width: 52, height: 58, borderRadius: 12, border: `1px solid ${pinError ? C.red : C.line}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 600, background: "#fff" }}>{pin[i] ? "•" : ""}</div>)}
       </div>
       {pinError && <div style={{ textAlign: "center", color: C.red, fontSize: 14, fontWeight: 600, marginBottom: 14 }}>PIN incorrecto</div>}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, maxWidth: 270, margin: "0 auto" }}>
@@ -581,9 +583,9 @@ export default function App() {
   const myResolved = records.filter(r => r.resuelto_por === user).length;
 
   let tabs = [];
-  if (role === "agent") tabs = ["llamadas", "perdidas", "queue", "citas", "historial"];
-  else if (role === "tech") tabs = ["queue", "citas", "stats", "historial"];
+  if (role === "tech") tabs = ["queue", "citas", "stats", "historial"];
   else if (role === "admin") tabs = ["dashboard", "llamadas", "perdidas", "queue", "citas", "stats", "historial"];
+  else tabs = ["llamadas", "perdidas", "queue", "citas", "historial"]; // agent, recepcion o cualquier otro rol
   if (user === "Carlos" && !tabs.includes("dashboard")) tabs = ["dashboard", ...tabs];
   const tabLabels = { llamadas: "Nueva llamada", perdidas: "Por devolver", queue: "Queue", citas: "Citas", historial: "Historial", dashboard: "Dashboard", stats: "Estadísticas" };
   const tabBadge = { perdidas: perdidasCount, queue: pendingCount, citas: citasCount };
@@ -601,7 +603,7 @@ export default function App() {
     const n = tabBadge[t] || 0, on = tab === t;
     if (mobile) return (
       <button key={t} onClick={() => setTab(t)} style={{ padding: "9px 14px", borderRadius: 999, border: `1px solid ${on ? C.navy : C.line}`, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", background: on ? C.navy : "#fff", color: on ? "#fff" : C.text, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 8 }}>
-        {tabLabels[t]}{n > 0 && <span style={{ minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10, fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", background: t === "perdidas" ? C.red : (on ? "rgba(255,255,255,.25)" : C.slateBg), color: t === "perdidas" || on ? "#fff" : C.text }}>{n}</span>}
+        {tabLabels[t]}{n > 0 && <span style={{ minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10, fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center", background: t === "perdidas" ? C.red : (on ? "rgba(255,255,255,.25)" : C.slateBg), color: t === "perdidas" || on ? "#fff" : C.text }}>{n}</span>}
       </button>
     );
     return (
@@ -629,13 +631,13 @@ export default function App() {
       {/* ---- menu lateral (computadora) ---- */}
       <aside className="side">
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 26 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 10, background: "#fff", color: C.navy, fontWeight: 900, display: "grid", placeItems: "center" }}>M</div>
-          <div><div style={{ fontSize: 15, fontWeight: 700 }}>MareyApp</div><div style={{ fontSize: 11, opacity: .7 }}>{rolTxt}</div></div>
+          <div style={{ width: 34, height: 34, borderRadius: 10, background: "#fff", color: C.navy, fontWeight: 600, display: "grid", placeItems: "center" }}>M</div>
+          <div><div style={{ fontSize: 15, fontWeight: 600 }}>MareyApp</div><div style={{ fontSize: 11, opacity: .7 }}>{rolTxt}</div></div>
         </div>
         <nav><Nav /></nav>
         <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 10, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,.14)" }}>
-          <div style={{ width: 34, height: 34, borderRadius: 17, background: "#d98a1f", display: "grid", placeItems: "center", fontWeight: 800 }}>{user[0]}</div>
-          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 700, fontSize: 14 }}>{user}</div><div style={{ fontSize: 11, opacity: .7 }}>{myResolved} atendidas</div></div>
+          <div style={{ width: 34, height: 34, borderRadius: 17, background: "#d98a1f", display: "grid", placeItems: "center", fontWeight: 600 }}>{user[0]}</div>
+          <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{user}</div><div style={{ fontSize: 11, opacity: .7 }}>{myResolved} atendidas</div></div>
           <button onClick={logout} style={{ background: "none", border: "none", color: "rgba(255,255,255,.7)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: FONT }}>Salir</button>
         </div>
       </aside>
@@ -644,8 +646,8 @@ export default function App() {
         {/* ---- barra superior ---- */}
         <div className="topbar">
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <div className="mtabs-logo" style={{ width: 30, height: 30, borderRadius: 9, background: C.navy, color: "#fff", fontWeight: 900, display: "grid", placeItems: "center", fontSize: 13 }}>M</div>
-            <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: -0.2, whiteSpace: "nowrap" }}>{tabLabels[tab]}</div>
+            <div className="mtabs-logo" style={{ width: 30, height: 30, borderRadius: 9, background: C.navy, color: "#fff", fontWeight: 600, display: "grid", placeItems: "center", fontSize: 13 }}>M</div>
+            <div style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>{tabLabels[tab]}</div>
           </div>
           <div style={{ flex: 1 }} />
           <Banner />
@@ -663,7 +665,7 @@ export default function App() {
             {devolviendo && (
               <div style={{ ...S.card, background: C.amberBg, borderColor: "#FCD34D", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>Devolviendo llamada perdida</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.amber }}>Devolviendo llamada perdida</div>
                   <div style={{ fontSize: 13, color: C.amber }}>{fmtTel(devolviendo.telefono)}{devolviendo.nombre_cid ? ` · ${devolviendo.nombre_cid}` : ""} · llamó {devolviendo.veces} {devolviendo.veces === 1 ? "vez" : "veces"}</div>
                 </div>
                 <button onClick={() => { setDevolviendo(null); setForm(FORM0); setClienteFound(null); setClienteHistory([]); }} style={S.small}>Cancelar</button>
@@ -673,14 +675,14 @@ export default function App() {
               <div style={{ marginBottom: 16 }}>
                 <label style={S.label}>Teléfono</label>
                 <div style={{ position: "relative" }}>
-                  <input style={{ ...S.input, fontSize: 24, fontWeight: 800, letterSpacing: .5, height: 58, paddingRight: clienteFound ? 200 : 14 }} value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} onBlur={e => searchPhone(e.target.value)} placeholder="787-000-0000" inputMode="tel" autoFocus />
+                  <input style={{ ...S.input, fontSize: 21, fontWeight: 500, fontVariantNumeric: "tabular-nums", height: 54, paddingRight: clienteFound ? 200 : 14 }} value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} onBlur={e => searchPhone(e.target.value)} placeholder="787-000-0000" inputMode="tel" autoFocus />
                   {searching && <span style={{ position: "absolute", right: 14, top: 20, fontSize: 12, color: C.faint }}>Buscando...</span>}
                   {!searching && clienteFound && <span style={{ position: "absolute", right: 12, top: 15, ...S.pill(C.greenBg, C.green), padding: "6px 10px" }}>Cliente conocido · {clienteHistory.length} llamada{clienteHistory.length !== 1 ? "s" : ""}</span>}
                 </div>
               </div>
               {clienteFound && (
                 <div style={{ padding: "12px 14px", borderRadius: 12, background: "#F0FDF4", border: "1px solid #BBF7D0", marginBottom: 16 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>{clienteFound.nombre}{clienteHistory[0]?.municipio ? ` · ${clienteHistory[0].municipio}` : ""}{clienteHistory[0]?.modelo ? ` · ${clienteHistory[0].modelo}` : ""}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.green }}>{clienteFound.nombre}{clienteHistory[0]?.municipio ? ` · ${clienteHistory[0].municipio}` : ""}{clienteHistory[0]?.modelo ? ` · ${clienteHistory[0].modelo}` : ""}</div>
                   {clienteFound.direccion && <div style={{ fontSize: 12, color: C.green, marginTop: 2 }}>{clienteFound.direccion}</div>}
                   {clienteHistory.slice(0, 4).map(h => (
                     <div key={h.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: C.green, padding: "6px 0 0" }}>
@@ -714,7 +716,7 @@ export default function App() {
             <div style={{ ...S.card, padding: 16 }}>
               <div style={{ ...S.label, marginBottom: 12 }}>¿Qué pasó con la llamada?</div>
               {saved ? (
-                <div style={{ padding: "22px 10px", borderRadius: 12, background: C.greenBg, color: C.green, fontWeight: 800, textAlign: "center", fontSize: 16 }}>Guardado</div>
+                <div style={{ padding: "22px 10px", borderRadius: 12, background: C.greenBg, color: C.green, fontWeight: 600, textAlign: "center", fontSize: 16 }}>Guardado</div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[
@@ -747,7 +749,7 @@ export default function App() {
                 <div key={p.id} style={{ ...S.card, borderColor: urgente ? "#FCA5A5" : C.line }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.3 }}>{fmtTel(p.telefono)}</div>
+                      <div style={{ fontSize: 19, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtTel(p.telefono)}</div>
                       {p.nombre_cid && <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{p.nombre_cid}</div>}
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                         <span style={S.pill(p.tiene_voicemail ? C.violetBg : C.amberBg, p.tiene_voicemail ? C.violet : C.amber)}>{p.tiene_voicemail ? `Voicemail${p.voicemail_seg ? ` · ${p.voicemail_seg}s` : ""}` : "Perdida"}</span>
@@ -765,7 +767,7 @@ export default function App() {
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: urgente ? C.red : C.text }}>{hace(p.ultima_llamada)}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: urgente ? C.red : C.text }}>{hace(p.ultima_llamada)}</div>
                         <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{fmtDate(p.ultima_llamada)}</div>
                       </div>
                       <div className="acts3" style={{ gridTemplateColumns: "auto auto auto" }}>
@@ -822,7 +824,7 @@ export default function App() {
                 <div key={r.id} style={{ ...S.card, borderColor: urgent ? "#FCA5A5" : C.line }}>
                   <div onClick={() => setOpenId(open ? null : r.id)} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 10 }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 17, fontWeight: 700 }}>{r.cliente_nombre}</div>
+                      <div style={{ fontSize: 17, fontWeight: 600 }}>{r.cliente_nombre}</div>
                       <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>{fmtTel(r.cliente_telefono)} · {r.municipio} · {r.modelo}</div>
                       {r.problema && <div style={{ fontSize: 14, color: C.text, marginTop: 4 }}>{r.problema}</div>}
                       {r.antiguedad && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Tiempo con la unidad: {r.antiguedad}</div>}
@@ -872,7 +874,7 @@ export default function App() {
               <div key={r.id} style={S.card}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 17, fontWeight: 700 }}>{r.cliente_nombre}</div>
+                    <div style={{ fontSize: 17, fontWeight: 600 }}>{r.cliente_nombre}</div>
                     <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>{fmtTel(r.cliente_telefono)} · {r.municipio}</div>
                     <div style={{ fontSize: 14, color: C.text }}>{r.modelo}{r.problema ? ` · ${r.problema}` : ""}</div>
                     {r.direccion && <div style={{ fontSize: 14, color: C.ink, marginTop: 6 }}>{r.direccion}</div>}
@@ -882,7 +884,7 @@ export default function App() {
                   <Badge status={r.status} />
                 </div>
                 {r.status === "cita_domicilio" && user === "Anthony" && <button onClick={() => confirmCita(r.id)} style={{ ...S.btn("amber"), marginTop: 12 }}>Confirmar en Planner</button>}
-                {r.status === "cita_domicilio" && user !== "Anthony" && <div style={{ marginTop: 12, padding: "10px", borderRadius: 12, background: C.amberBg, color: C.amber, fontSize: 13, fontWeight: 700, textAlign: "center" }}>Pendiente de confirmar</div>}
+                {r.status === "cita_domicilio" && user !== "Anthony" && <div style={{ marginTop: 12, padding: "10px", borderRadius: 12, background: C.amberBg, color: C.amber, fontSize: 13, fontWeight: 600, textAlign: "center" }}>Pendiente de confirmar</div>}
                 {role === "admin" && <button onClick={() => deleteLlamada(r.id)} style={{ ...S.small, marginTop: 10, color: C.red }}>Borrar cita</button>}
               </div>
             ));
@@ -911,12 +913,12 @@ export default function App() {
             return sorted.map(([nombre, s]) => (
               <div key={nombre} style={{ ...S.card, borderColor: nombre === user ? C.navy : C.line }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700 }}>{nombre}</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: C.navy }}>{s.total}</div>
+                  <div style={{ fontSize: 16, fontWeight: 600 }}>{nombre}</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, color: C.navy }}>{s.total}</div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
                   {[["Resueltas", s.resueltas, C.greenBg, C.green], ["Citados", s.citados, C.violetBg, C.violet], ["Domicilio", s.domicilio, C.amberBg, C.amber], ["No contestó", s.no, C.redBg, C.red]].map(([l, v, b, c]) => (
-                    <div key={l} style={{ padding: "10px 6px", borderRadius: 12, background: b, textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 11, color: c, fontWeight: 600 }}>{l}</div></div>
+                    <div key={l} style={{ padding: "10px 6px", borderRadius: 12, background: b, textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 600, color: c }}>{v}</div><div style={{ fontSize: 11, color: c, fontWeight: 600 }}>{l}</div></div>
                   ))}
                 </div>
               </div>
@@ -942,7 +944,7 @@ export default function App() {
                 <div key={r.id} style={{ ...S.card, padding: "14px 16px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700 }}>{r.cliente_nombre}</div>
+                      <div style={{ fontSize: 15, fontWeight: 600 }}>{r.cliente_nombre}</div>
                       <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{fmtTel(r.cliente_telefono)} · {r.municipio} · {r.modelo}{r.antiguedad ? ` · ${r.antiguedad}` : ""}</div>
                       <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{r.registrado_por}{r.resuelto_por ? ` · atendido por ${r.resuelto_por}` : ""}</div>
                       {role === "admin" && (
@@ -1009,7 +1011,7 @@ export default function App() {
 
                 <div style={S.card}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>Llamadas perdidas</div>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>Llamadas perdidas</div>
                     <div style={S.sub}>{m ? `${m.pct_devueltas}% devueltas` : ""}</div>
                   </div>
                   {!m ? <div style={S.sub}>Cargando...</div> : (
@@ -1025,13 +1027,13 @@ export default function App() {
                 </div>
 
                 <div style={{ ...S.card }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Por pueblo</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Por pueblo</div>
                   {pueblos.map(([pueblo, count]) => (
                     <div key={pueblo} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                       <div style={{ width: 96, fontSize: 13, color: C.muted, textAlign: "right", flexShrink: 0 }}>{pueblo}</div>
                       <div style={{ flex: 1, height: 22, background: C.slateBg, borderRadius: 6, overflow: "hidden" }}>
                         <div style={{ width: (count / maxP * 100) + "%", height: "100%", background: C.navy, borderRadius: 6, minWidth: 26, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{count}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "#fff" }}>{count}</span>
                         </div>
                       </div>
                     </div>
