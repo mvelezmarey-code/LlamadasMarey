@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -6,75 +6,160 @@ const supabase = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNyeGxvdHhyb3Noc3NueXJ1ZmdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI5ODM4MTIsImV4cCI6MjA5ODU1OTgxMn0.Yh2HeOGkAB4krgsGLcszpAVOBuUeI1RSFJT9p47gw_s"
 );
 
+/* =====================================================================
+   DISENO
+   Una paleta, un tipo de tarjeta, un tipo de boton. Navy como unico
+   color fuerte; los estados usan tonos suaves con texto oscuro.
+   ===================================================================== */
+const C = {
+  navy: "#16324F", navyDark: "#0F2438", ink: "#111827", text: "#374151", muted: "#6B7280", faint: "#9CA3AF",
+  line: "#E5E7EB", bg: "#F5F6F8", card: "#FFFFFF", amber: "#B45309", amberBg: "#FEF3C7",
+  green: "#166534", greenBg: "#DCFCE7", red: "#B91C1C", redBg: "#FEE2E2", blue: "#1D4ED8", blueBg: "#DBEAFE",
+  violet: "#5B21B6", violetBg: "#EDE9FE", slateBg: "#F1F5F9"
+};
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif";
+
 const EMAIL_MAP = {
   Carlos: "carlos@marey.local", Anthony: "anthony@marey.local", Luis: "luis@marey.local",
   Willy: "willy@marey.local", Kenneth: "kenneth@marey.local", Jean: "jean@marey.local", Admin: "admin@marey.local"
 };
 
+const STATUS = {
+  dirigido:            { t: "Dirigido",       c: C.green,  b: C.greenBg },
+  pendiente_willy:     { t: "Pendiente",      c: C.amber,  b: C.amberBg },
+  atendido_resuelto:   { t: "Resuelto",       c: C.green,  b: C.greenBg },
+  atendido_cita_marey: { t: "Citó a Marey",   c: C.violet, b: C.violetBg },
+  no_contesto:         { t: "No contestó",    c: C.red,    b: C.redBg },
+  cita_domicilio:      { t: "Cita domicilio", c: C.amber,  b: C.amberBg },
+  cita_confirmada:     { t: "Confirmada",     c: C.green,  b: C.greenBg }
+};
+
+/* ---------- estilos base ---------- */
+const S = {
+  page: { maxWidth: 640, margin: "0 auto", padding: "0 16px 48px", fontFamily: FONT, color: C.ink },
+  card: { background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, marginBottom: 12, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" },
+  input: { width: "100%", boxSizing: "border-box", padding: "13px 14px", borderRadius: 12, border: `1px solid ${C.line}`, fontSize: 16, background: "#fff", color: C.ink, outline: "none", fontFamily: FONT },
+  label: { display: "block", fontSize: 12, fontWeight: 600, color: C.muted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 },
+  h2: { fontSize: 20, fontWeight: 700, margin: "4px 0 14px", letterSpacing: -0.2 },
+  sub: { fontSize: 13, color: C.muted },
+  pill: (bg, color) => ({ display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, background: bg, color }),
+  btn: (kind = "primary") => {
+    const base = { width: "100%", padding: "14px 18px", borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", border: "1px solid transparent", fontFamily: FONT, transition: "transform .05s" };
+    if (kind === "primary") return { ...base, background: C.navy, color: "#fff" };
+    if (kind === "ghost") return { ...base, background: "#fff", color: C.text, border: `1px solid ${C.line}` };
+    if (kind === "danger") return { ...base, background: C.redBg, color: C.red };
+    if (kind === "green") return { ...base, background: C.green, color: "#fff" };
+    if (kind === "amber") return { ...base, background: C.amberBg, color: C.amber };
+    if (kind === "blue") return { ...base, background: C.blue, color: "#fff" };
+    if (kind === "violet") return { ...base, background: C.violet, color: "#fff" };
+    if (kind === "disabled") return { ...base, background: C.slateBg, color: C.faint, cursor: "not-allowed" };
+    return base;
+  },
+  small: { padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer", border: `1px solid ${C.line}`, background: "#fff", color: C.text, fontFamily: FONT }
+};
+
+/* ---------- utilidades ---------- */
 function fmtDate(d) { return new Date(d).toLocaleDateString("es-PR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+function fmtTel(t) { const d = String(t || "").replace(/\D/g, "").replace(/^1(\d{10})$/, "$1"); return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}` : (t || ""); }
+function soloDigitos(t) { return String(t || "").replace(/\D/g, "").replace(/^1(\d{10})$/, "$1"); }
+function hace(iso) {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (m < 1) return "ahora"; if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60); if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} d`;
+}
 function hrsLeft(c) { return Math.max(0, 24 - ((Date.now() - new Date(c).getTime()) / 3600000)).toFixed(0); }
-function isToday(d) { const t = new Date(); const x = new Date(d); return x.getDate() === t.getDate() && x.getMonth() === t.getMonth() && x.getFullYear() === t.getFullYear(); }
-function isThisWeek(d) { const t = new Date(); const x = new Date(d); const startOfWeek = new Date(t); startOfWeek.setDate(t.getDate() - t.getDay()); startOfWeek.setHours(0,0,0,0); return x >= startOfWeek; }
-function isThisMonth(d) { const t = new Date(); const x = new Date(d); return x.getMonth() === t.getMonth() && x.getFullYear() === t.getFullYear(); }
-function isThisYear(d) { const t = new Date(); const x = new Date(d); return x.getFullYear() === t.getFullYear(); }
-function filterByTime(records, filter, dateRange) {
-  if (filter === "today") return records.filter(r => isToday(r.created_at));
-  if (filter === "week") return records.filter(r => isThisWeek(r.created_at));
-  if (filter === "month") return records.filter(r => isThisMonth(r.created_at));
-  if (filter === "year") return records.filter(r => isThisYear(r.created_at));
+function isToday(d) { const t = new Date(), x = new Date(d); return x.getDate() === t.getDate() && x.getMonth() === t.getMonth() && x.getFullYear() === t.getFullYear(); }
+function isThisWeek(d) { const t = new Date(), x = new Date(d); const s = new Date(t); s.setDate(t.getDate() - t.getDay()); s.setHours(0, 0, 0, 0); return x >= s; }
+function isThisMonth(d) { const t = new Date(), x = new Date(d); return x.getMonth() === t.getMonth() && x.getFullYear() === t.getFullYear(); }
+function isThisYear(d) { return new Date(d).getFullYear() === new Date().getFullYear(); }
+function filterByTime(records, filter, dateRange, field = "created_at") {
+  if (filter === "today") return records.filter(r => isToday(r[field]));
+  if (filter === "week") return records.filter(r => isThisWeek(r[field]));
+  if (filter === "month") return records.filter(r => isThisMonth(r[field]));
+  if (filter === "year") return records.filter(r => isThisYear(r[field]));
   if (filter === "custom" && dateRange) {
     const from = dateRange.from ? new Date(dateRange.from + "T00:00:00") : null;
     const to = dateRange.to ? new Date(dateRange.to + "T23:59:59") : null;
-    return records.filter(r => {
-      const d = new Date(r.created_at);
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-      return true;
-    });
+    return records.filter(r => { const d = new Date(r[field]); if (from && d < from) return false; if (to && d > to) return false; return true; });
   }
   return records;
 }
+// rango de fechas (yyyy-mm-dd) para los RPC de metricas
+function rangoFechas(filter, dateRange) {
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const t = new Date();
+  if (filter === "today") return [iso(t), iso(t)];
+  if (filter === "week") { const s = new Date(t); s.setDate(t.getDate() - t.getDay()); return [iso(s), iso(t)]; }
+  if (filter === "month") return [iso(new Date(t.getFullYear(), t.getMonth(), 1)), iso(t)];
+  if (filter === "year") return [`${t.getFullYear()}-01-01`, iso(t)];
+  if (filter === "custom") return [dateRange.from || "2020-01-01", dateRange.to || iso(t)];
+  return ["2020-01-01", iso(t)];
+}
 
-const STATUS_COLORS = {
-  dirigido: { t: "Dirigido", c: "#0F6E56", b: "#E1F5EE" },
-  pendiente_willy: { t: "Pendiente", c: "#854F0B", b: "#FAEEDA" },
-  atendido_resuelto: { t: "Resuelto", c: "#3B6D11", b: "#EAF3DE" },
-  atendido_cita_marey: { t: "Citó a Marey", c: "#534AB7", b: "#EEEDFE" },
-  no_contesto: { t: "No contestó", c: "#A32D2D", b: "#FCEBEB" },
-  cita_domicilio: { t: "Cita domicilio", c: "#854F0B", b: "#FAEEDA" },
-  cita_confirmada: { t: "Confirmada", c: "#3B6D11", b: "#EAF3DE" }
-};
+// sonido corto de aviso (dos tonos), sin archivos
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const tono = (f, t0, dur) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = "sine"; o.frequency.value = f; g.gain.value = 0.0001; o.connect(g); g.connect(ctx.destination); o.start(t0); g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.stop(t0 + dur + 0.05); };
+    tono(880, ctx.currentTime, 0.18); tono(1175, ctx.currentTime + 0.2, 0.25);
+  } catch { /* sin audio */ }
+}
 
-const bigBtn = (bg) => ({ padding: "16px 24px", borderRadius: 14, border: "none", fontSize: 16, fontWeight: 600, background: bg, color: "#fff", cursor: "pointer", width: "100%", textAlign: "center" });
-const inputStyle = { padding: "14px 16px", borderRadius: 12, border: "2px solid #e0e0e0", fontSize: 16, width: "100%", boxSizing: "border-box", background: "#fff" };
-const labelStyle = { fontSize: 14, fontWeight: 600, color: "#555", marginBottom: 6, display: "block" };
-const cardStyle = { padding: "16px", borderRadius: 14, border: "2px solid #e8e8e8", marginBottom: 10, background: "#fff" };
+/* ---------- CSS global minimo (fuente, animaciones) ---------- */
+function GlobalCss() {
+  return (
+    <style>{`
+      body { background: ${C.bg}; margin: 0; }
+      input:focus, select:focus, textarea:focus { border-color: ${C.navy} !important; box-shadow: 0 0 0 3px rgba(22,50,79,0.12); }
+      button:active { transform: translateY(1px); }
+      @keyframes bajar { from { transform: translateY(-16px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+      @keyframes latir { 0%,100% { box-shadow: 0 0 0 0 rgba(185,28,28,.35) } 50% { box-shadow: 0 0 0 8px rgba(185,28,28,0) } }
+      .tabs::-webkit-scrollbar { display: none; }
+    `}</style>
+  );
+}
 
+/* ---------- componentes chicos ---------- */
 function Badge({ status, centro }) {
-  const s = STATUS_COLORS[status] || { t: status, c: "#888", b: "#f0f0f0" };
-  let label = s.t;
-  if (status === "dirigido" && centro) label = "Dirigido a " + centro;
-  return <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 500, background: s.b, color: s.c }}>{label}</span>;
+  const s = STATUS[status] || { t: status, c: C.muted, b: C.slateBg };
+  return <span style={S.pill(s.b, s.c)}>{status === "dirigido" && centro ? `Dirigido a ${centro}` : s.t}</span>;
+}
+
+function Empty({ titulo, texto }) {
+  return (
+    <div style={{ ...S.card, textAlign: "center", padding: "44px 20px" }}>
+      <div style={{ fontSize: 17, fontWeight: 700, color: C.ink }}>{titulo}</div>
+      {texto && <div style={{ ...S.sub, marginTop: 6 }}>{texto}</div>}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone = "navy", sub }) {
+  const bg = { navy: C.navy, green: C.green, amber: C.amber, red: C.red, blue: C.blue, violet: C.violet, slate: C.slateBg }[tone] || C.navy;
+  const light = tone === "slate";
+  return (
+    <div style={{ padding: "16px 12px", borderRadius: 14, background: bg, textAlign: "center" }}>
+      <div style={{ fontSize: 26, fontWeight: 800, color: light ? C.ink : "#fff", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: light ? C.muted : "rgba(255,255,255,.85)", marginTop: 6, letterSpacing: .2 }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: light ? C.faint : "rgba(255,255,255,.7)", marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
 }
 
 function TimeFilter({ value, onChange, dateRange, onDateRange }) {
+  const ops = [["today", "Hoy"], ["week", "Semana"], ["month", "Mes"], ["year", "Año"], ["all", "Todo"], ["custom", "Rango"]];
   return (
-    <div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-        {[{ id: "today", label: "Hoy" }, { id: "week", label: "Semana" }, { id: "month", label: "Mes" }, { id: "year", label: "Año" }, { id: "all", label: "Todo" }, { id: "custom", label: "Rango" }].map(o => (
-          <button key={o.id} onClick={() => onChange(o.id)} style={{ padding: "8px 16px", borderRadius: 10, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", background: value === o.id ? "#534AB7" : "#f0f0f0", color: value === o.id ? "#fff" : "#888" }}>{o.label}</button>
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "inline-flex", gap: 4, padding: 4, background: C.slateBg, borderRadius: 12 }}>
+        {ops.map(([id, label]) => (
+          <button key={id} onClick={() => onChange(id)} style={{ padding: "7px 12px", borderRadius: 9, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: FONT, background: value === id ? "#fff" : "transparent", color: value === id ? C.ink : C.muted, boxShadow: value === id ? "0 1px 2px rgba(0,0,0,.08)" : "none" }}>{label}</button>
         ))}
       </div>
       {value === "custom" && (
-        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#888", display: "block", marginBottom: 4 }}>Desde</label>
-            <input type="date" value={dateRange.from} onChange={e => onDateRange({ ...dateRange, from: e.target.value })} style={{ ...inputStyle, fontSize: 14, padding: "10px 12px" }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#888", display: "block", marginBottom: 4 }}>Hasta</label>
-            <input type="date" value={dateRange.to} onChange={e => onDateRange({ ...dateRange, to: e.target.value })} style={{ ...inputStyle, fontSize: 14, padding: "10px 12px" }} />
-          </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+          <div style={{ flex: 1 }}><label style={S.label}>Desde</label><input type="date" value={dateRange.from} onChange={e => onDateRange({ ...dateRange, from: e.target.value })} style={{ ...S.input, padding: "10px 12px", fontSize: 14 }} /></div>
+          <div style={{ flex: 1 }}><label style={S.label}>Hasta</label><input type="date" value={dateRange.to} onChange={e => onDateRange({ ...dateRange, to: e.target.value })} style={{ ...S.input, padding: "10px 12px", fontSize: 14 }} /></div>
         </div>
       )}
     </div>
@@ -88,147 +173,125 @@ function SearchSelect({ label, value, onChange, groups, placeholder }) {
   const ref = useRef(null);
 
   useEffect(() => {
-    if (value && !selectedLabel) {
-      for (const items of Object.values(groups)) {
-        const found = items.find(i => String(i.id) === String(value));
-        if (found) { setSelectedLabel(found.nombre); break; }
-      }
+    if (!value) { setSelectedLabel(""); return; }
+    for (const items of Object.values(groups)) {
+      const found = items.find(i => String(i.id) === String(value));
+      if (found) { setSelectedLabel(found.nombre); return; }
     }
-  }, [value, groups, selectedLabel]);
+  }, [value, groups]);
 
   useEffect(() => {
-    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const filteredGroups = {};
   const q = search.toLowerCase();
-  Object.entries(groups).forEach(([group, items]) => {
-    const filtered = items.filter(i => i.nombre.toLowerCase().includes(q));
-    if (filtered.length > 0) filteredGroups[group] = filtered;
-  });
-
-  const handleSelect = (item) => {
-    onChange(String(item.id));
-    setSelectedLabel(item.nombre);
-    setSearch("");
-    setOpen(false);
-  };
-
-  const clear = () => { onChange(""); setSelectedLabel(""); setSearch(""); };
+  const filtered = {};
+  Object.entries(groups).forEach(([g, items]) => { const f = items.filter(i => i.nombre.toLowerCase().includes(q)); if (f.length) filtered[g] = f; });
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <label style={labelStyle}>{label}</label>
+      <label style={S.label}>{label}</label>
       {selectedLabel && !open ? (
-        <div onClick={() => { setOpen(true); setSearch(""); }} style={{ ...inputStyle, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div onClick={() => { setOpen(true); setSearch(""); }} style={{ ...S.input, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>{selectedLabel}</span>
-          <span onClick={(e) => { e.stopPropagation(); clear(); }} style={{ color: "#aaa", fontSize: 18, cursor: "pointer", padding: "0 4px" }}>x</span>
+          <span onClick={(e) => { e.stopPropagation(); onChange(""); setSelectedLabel(""); setSearch(""); }} style={{ color: C.faint, fontSize: 13, fontWeight: 600, padding: "0 4px" }}>Cambiar</span>
         </div>
       ) : (
-        <input
-          style={inputStyle}
-          value={search}
-          onChange={e => { setSearch(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          placeholder={placeholder || "Buscar..."}
-        />
+        <input style={S.input} value={search} onChange={e => { setSearch(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={placeholder || "Buscar..."} />
       )}
       {open && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "2px solid #e0e0e0", borderRadius: 12, maxHeight: 260, overflowY: "auto", zIndex: 100, marginTop: 4, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
-          {Object.keys(filteredGroups).length === 0 ? (
-            <div style={{ padding: "14px 16px", color: "#aaa", fontSize: 14 }}>No se encontró</div>
-          ) : (
-            Object.entries(filteredGroups).map(([group, items]) => (
-              <div key={group}>
-                <div style={{ padding: "8px 16px 4px", fontSize: 12, fontWeight: 700, color: "#888", background: "#f9f9f9" }}>{group}</div>
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, maxHeight: 260, overflowY: "auto", zIndex: 100, marginTop: 6, boxShadow: "0 12px 32px rgba(16,24,40,.12)" }}>
+          {Object.keys(filtered).length === 0 ? <div style={{ padding: 14, color: C.faint, fontSize: 14 }}>No se encontró</div> :
+            Object.entries(filtered).map(([g, items]) => (
+              <div key={g}>
+                <div style={{ padding: "8px 14px 4px", fontSize: 11, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: .4, background: "#FAFAFA" }}>{g}</div>
                 {items.map(item => (
-                  <div key={item.id} onClick={() => handleSelect(item)} style={{ padding: "10px 16px", cursor: "pointer", fontSize: 15 }}
-                    onMouseEnter={e => e.target.style.background = "#f0f0f0"} onMouseLeave={e => e.target.style.background = "#fff"}>
-                    {item.nombre}
-                  </div>
+                  <div key={item.id} onClick={() => { onChange(String(item.id)); setSelectedLabel(item.nombre); setSearch(""); setOpen(false); }} style={{ padding: "11px 14px", cursor: "pointer", fontSize: 15 }}
+                    onMouseEnter={e => e.currentTarget.style.background = C.slateBg} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>{item.nombre}</div>
                 ))}
               </div>
-            ))
-          )}
+            ))}
         </div>
       )}
     </div>
   );
 }
 
+/* ---------- login ---------- */
 function LoginScreen({ onLogin }) {
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  if (!name) {
-    return (
-      <div style={{ maxWidth: 360, margin: "0 auto", padding: "60px 20px" }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 16, background: "#534AB7", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 28, fontWeight: 700, marginBottom: 16 }}>M</div>
-          <div style={{ fontSize: 22, fontWeight: 600 }}>Marey Service Center</div>
-        </div>
-        <label style={labelStyle}>¿Quién eres?</label>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {Object.keys(EMAIL_MAP).map(u => (
-            <button key={u} onClick={() => setName(u)} style={{ padding: "18px", borderRadius: 14, border: "none", fontSize: 17, fontWeight: 600, cursor: "pointer", background: "#534AB7", color: "#fff" }}>{u}</button>
-          ))}
-        </div>
+  const Logo = () => (
+    <div style={{ textAlign: "center", marginBottom: 32 }}>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: C.navy, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 24, fontWeight: 800, marginBottom: 14 }}>M</div>
+      <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.2 }}>Marey Service Center</div>
+      <div style={S.sub}>Registro de llamadas</div>
+    </div>
+  );
+
+  if (!name) return (
+    <div style={{ ...S.page, maxWidth: 380, paddingTop: 64 }}><GlobalCss /><Logo />
+      <label style={S.label}>¿Quién eres?</label>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {Object.keys(EMAIL_MAP).map(u => <button key={u} onClick={() => setName(u)} style={{ ...S.btn("ghost"), padding: "18px", fontSize: 16 }}>{u}</button>)}
       </div>
-    );
-  }
+    </div>
+  );
 
   const handlePin = async (digit) => {
     setPinError(false);
-    const newPin = pin + digit;
-    setPin(newPin);
-    if (newPin.length === 4) {
+    const p = pin + digit; setPin(p);
+    if (p.length === 4) {
       setLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({ email: EMAIL_MAP[name], password: newPin });
+      const { data, error } = await supabase.auth.signInWithPassword({ email: EMAIL_MAP[name], password: p });
       if (error) { setPinError(true); setLoading(false); setTimeout(() => setPin(""), 800); }
       else {
         const { data: ud } = await supabase.from("usuarios").select("id, nombre, rol").eq("auth_id", data.user.id).single();
-        setLoading(false);
-        if (ud) onLogin(ud);
+        setLoading(false); if (ud) onLogin(ud);
       }
     }
   };
 
   return (
-    <div style={{ maxWidth: 360, margin: "0 auto", padding: "60px 20px" }}>
-      <div style={{ textAlign: "center", marginBottom: 40 }}>
-        <div style={{ fontSize: 22, fontWeight: 600 }}>Hola, {name}</div>
-        <div style={{ fontSize: 16, color: "#888", marginTop: 8 }}>{loading ? "Verificando..." : "Entra tu PIN"}</div>
+    <div style={{ ...S.page, maxWidth: 380, paddingTop: 64 }}><GlobalCss /><Logo />
+      <div style={{ textAlign: "center", marginBottom: 22 }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Hola, {name}</div>
+        <div style={S.sub}>{loading ? "Verificando..." : "Entra tu PIN"}</div>
       </div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 24 }}>
-        {[0,1,2,3].map(i => (<div key={i} style={{ width: 52, height: 58, borderRadius: 12, border: pinError ? "2px solid #E24B4A" : "2px solid #e0e0e0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 600, background: "#fff" }}>{pin[i] ? "*" : ""}</div>))}
+      <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 20 }}>
+        {[0, 1, 2, 3].map(i => <div key={i} style={{ width: 52, height: 58, borderRadius: 12, border: `1px solid ${pinError ? C.red : C.line}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, background: "#fff" }}>{pin[i] ? "•" : ""}</div>)}
       </div>
-      {pinError && <div style={{ textAlign: "center", color: "#E24B4A", fontSize: 15, fontWeight: 500, marginBottom: 16 }}>PIN incorrecto</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, maxWidth: 260, margin: "0 auto" }}>
-        {[1,2,3,4,5,6,7,8,9,"",0,"del"].map((n, i) => {
-          if (n === "") return <div key={i}></div>;
-          if (n === "del") return <button key={i} onClick={() => { setPin(p => p.slice(0,-1)); setPinError(false); }} style={{ padding: "16px", borderRadius: 12, border: "1px solid #e0e0e0", fontSize: 16, fontWeight: 500, background: "#f5f5f5", cursor: "pointer", color: "#888" }}>Borrar</button>;
-          return <button key={i} onClick={() => handlePin(String(n))} disabled={loading} style={{ padding: "16px", borderRadius: 12, border: "1px solid #e0e0e0", fontSize: 20, fontWeight: 600, background: "#fff", cursor: "pointer" }}>{n}</button>;
+      {pinError && <div style={{ textAlign: "center", color: C.red, fontSize: 14, fontWeight: 600, marginBottom: 14 }}>PIN incorrecto</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, maxWidth: 270, margin: "0 auto" }}>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "del"].map((n, i) => {
+          if (n === "") return <div key={i} />;
+          if (n === "del") return <button key={i} onClick={() => { setPin(p => p.slice(0, -1)); setPinError(false); }} style={{ ...S.btn("ghost"), padding: 16, fontSize: 14, color: C.muted }}>Borrar</button>;
+          return <button key={i} onClick={() => handlePin(String(n))} disabled={loading} style={{ ...S.btn("ghost"), padding: 16, fontSize: 20 }}>{n}</button>;
         })}
       </div>
-      <button onClick={() => { setName(""); setPin(""); setPinError(false); }} style={{ display: "block", margin: "24px auto 0", background: "none", border: "none", color: "#888", fontSize: 14, cursor: "pointer" }}>Cambiar usuario</button>
+      <button onClick={() => { setName(""); setPin(""); setPinError(false); }} style={{ display: "block", margin: "22px auto 0", background: "none", border: "none", color: C.muted, fontSize: 14, cursor: "pointer", fontFamily: FONT }}>Cambiar usuario</button>
     </div>
   );
 }
 
+/* =====================================================================
+   APP
+   ===================================================================== */
 export default function App() {
   const [userData, setUserData] = useState(null);
   const [tab, setTab] = useState("llamadas");
   const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [municipios, setMunicipios] = useState([]);
   const [modelos, setModelos] = useState([]);
   const [statusList, setStatusList] = useState([]);
   const [antiguedadList, setAntiguedadList] = useState([]);
-  const [form, setForm] = useState({ telefono: "", nombre: "", municipio_id: "", modelo_id: "", antiguedad_id: "", problema: "" });
+  const FORM0 = { telefono: "", nombre: "", municipio_id: "", modelo_id: "", antiguedad_id: "", problema: "" };
+  const [form, setForm] = useState(FORM0);
   const [clienteFound, setClienteFound] = useState(null);
   const [clienteHistory, setClienteHistory] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -238,77 +301,129 @@ export default function App() {
   const [showCitaId, setShowCitaId] = useState(null);
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({});
-  const [statsFilter, setStatsFilter] = useState("all");
-  const [dashFilter, setDashFilter] = useState("all");
-  const [histFilter, setHistFilter] = useState("all");
-  const [queueFilter, setQueueFilter] = useState("all");
-  const [citasFilter, setCitasFilter] = useState("all");
-  const [statsDateRange, setStatsDateRange] = useState({ from: "", to: "" });
-  const [dashDateRange, setDashDateRange] = useState({ from: "", to: "" });
-  const [histDateRange, setHistDateRange] = useState({ from: "", to: "" });
-  const [queueDateRange, setQueueDateRange] = useState({ from: "", to: "" });
-  const [citasDateRange, setCitasDateRange] = useState({ from: "", to: "" });
+  const [filters, setFilters] = useState({ stats: "all", dash: "all", hist: "all", queue: "all", citas: "all", perd: "all" });
+  const [ranges, setRanges] = useState({ stats: { from: "", to: "" }, dash: { from: "", to: "" }, hist: { from: "", to: "" }, queue: { from: "", to: "" }, citas: { from: "", to: "" }, perd: { from: "", to: "" } });
+  const setF = (k, v) => setFilters(p => ({ ...p, [k]: v }));
+  const setR = (k, v) => setRanges(p => ({ ...p, [k]: v }));
 
+  // ---- llamadas perdidas ----
+  const [perdidas, setPerdidas] = useState([]);          // abiertas + tomadas
+  const [perdidasCerradas, setPerdidasCerradas] = useState([]); // historial reciente
+  const [devolviendo, setDevolviendo] = useState(null);  // fila de llamadas_perdidas que se esta devolviendo
+  const [aviso, setAviso] = useState(null);              // banner
+  const [metricasPerd, setMetricasPerd] = useState(null);
+  const [audioUrls, setAudioUrls] = useState({});
+  const perdidasRef = useRef([]);
+  const avisoTimer = useRef(null);
+
+  /* ---------- sesion y catalogos ---------- */
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        supabase.from("usuarios").select("id, nombre, rol").eq("auth_id", session.user.id).single().then(({ data }) => {
-          if (data) { setUserData(data); setTab(data.rol === "tech" ? "queue" : data.rol === "admin" ? "dashboard" : "llamadas"); }
-        });
-      }
+      if (!session) return;
+      supabase.from("usuarios").select("id, nombre, rol").eq("auth_id", session.user.id).single().then(({ data }) => {
+        if (data) { setUserData(data); setTab(data.rol === "tech" ? "queue" : data.rol === "admin" ? "dashboard" : "llamadas"); }
+      });
     });
   }, []);
 
   useEffect(() => {
     if (!userData) return;
-    supabase.from("municipios").select("*").order("nombre").then(({ data }) => { if (data) setMunicipios(data); });
-    supabase.from("modelos").select("*").eq("activo", true).order("categoria").order("subcategoria").order("nombre").then(({ data }) => { if (data) setModelos(data); });
-    supabase.from("status").select("*").then(({ data }) => { if (data) setStatusList(data); });
-    supabase.from("antiguedad").select("*").order("id").then(({ data }) => { if (data) setAntiguedadList(data); });
+    supabase.from("municipios").select("*").order("nombre").then(({ data }) => data && setMunicipios(data));
+    supabase.from("modelos").select("*").eq("activo", true).order("categoria").order("subcategoria").order("nombre").then(({ data }) => data && setModelos(data));
+    supabase.from("status").select("*").then(({ data }) => data && setStatusList(data));
+    supabase.from("antiguedad").select("*").order("id").then(({ data }) => data && setAntiguedadList(data));
   }, [userData]);
 
   const fetchRecords = useCallback(async () => {
-    setLoading(true);
     const { data } = await supabase.from("llamadas_completas").select("*").order("created_at", { ascending: false }).limit(500);
     if (data) setRecords(data);
-    setLoading(false);
   }, []);
 
   useEffect(() => { if (userData) { fetchRecords(); const iv = setInterval(fetchRecords, 30000); return () => clearInterval(iv); } }, [userData, fetchRecords]);
 
   useEffect(() => {
     if (!userData) return;
-    const ch = supabase.channel("llamadas_rt").on("postgres_changes", { event: "*", schema: "public", table: "llamadas" }, () => { fetchRecords(); }).subscribe();
+    const ch = supabase.channel("llamadas_rt").on("postgres_changes", { event: "*", schema: "public", table: "llamadas" }, fetchRecords).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [userData, fetchRecords]);
 
+  /* ---------- llamadas perdidas: carga + realtime ---------- */
+  const fetchPerdidas = useCallback(async () => {
+    const { data } = await supabase.from("v_llamadas_perdidas").select("*").neq("estado", "cerrada").order("ultima_llamada", { ascending: false });
+    const hace7 = new Date(Date.now() - 7 * 86400000).toISOString();
+    const { data: cer } = await supabase.from("v_llamadas_perdidas").select("*").eq("estado", "cerrada").gte("cerrada_at", hace7).order("cerrada_at", { ascending: false }).limit(100);
+    if (data) { setPerdidas(data); perdidasRef.current = data; }
+    if (cer) setPerdidasCerradas(cer);
+  }, []);
+
+  useEffect(() => { if (userData) fetchPerdidas(); }, [userData, fetchPerdidas]);
+
+  useEffect(() => {
+    if (!userData) return;
+    const ch = supabase.channel("perdidas_rt")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "llamadas_perdidas" }, (p) => { mostrarAviso(p.new, "nueva"); fetchPerdidas(); })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "llamadas_perdidas" }, (p) => {
+        if (p.new.estado !== "cerrada" && p.old && p.new.veces > (p.old.veces || 0)) mostrarAviso(p.new, "repite");
+        fetchPerdidas();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userData, fetchPerdidas]);
+
+  function mostrarAviso(fila, tipo) {
+    if (userData?.rol === "tech") return; // los tecnicos no devuelven estas llamadas
+    setAviso({ ...fila, tipo });
+    beep();
+    if (avisoTimer.current) clearTimeout(avisoTimer.current);
+    avisoTimer.current = setTimeout(() => setAviso(null), 25000);
+  }
+
+  // URL firmada para escuchar el voicemail
+  async function urlAudio(fila) {
+    if (!fila.voicemail_url) return;
+    if (audioUrls[fila.id]) return;
+    const { data } = await supabase.storage.from("voicemails").createSignedUrl(fila.voicemail_url, 3600);
+    if (data?.signedUrl) setAudioUrls(p => ({ ...p, [fila.id]: data.signedUrl }));
+  }
+
+  /* ---------- metricas de perdidas (dashboard) ---------- */
+  useEffect(() => {
+    if (!userData || tab !== "dashboard") return;
+    const [d, h] = rangoFechas(filters.dash, ranges.dash);
+    supabase.rpc("metricas_llamadas_perdidas", { p_desde: d, p_hasta: h }).then(({ data }) => setMetricasPerd(Array.isArray(data) ? data[0] : data));
+  }, [userData, tab, filters.dash, ranges.dash, perdidas.length, perdidasCerradas.length]);
+
   if (!userData) return <LoginScreen onLogin={(u) => { setUserData(u); setTab(u.rol === "tech" ? "queue" : u.rol === "admin" ? "dashboard" : "llamadas"); }} />;
 
-  const user = userData.nombre;
-  const role = userData.rol;
-  const userId = userData.id;
+  const user = userData.nombre, role = userData.rol, userId = userData.id;
   const getStatusId = (nombre) => { const s = statusList.find(x => x.nombre === nombre); return s ? s.id : null; };
 
+  /* ---------- cliente por telefono ---------- */
   const searchPhone = async (tel) => {
-    if (tel.length < 10) { setClienteFound(null); setClienteHistory([]); return; }
+    const dig = soloDigitos(tel);
+    if (dig.length < 10) { setClienteFound(null); setClienteHistory([]); return; }
     setSearching(true);
-    const { data: cliente } = await supabase.from("clientes").select("*").eq("telefono", tel).maybeSingle();
+    // acepta como este guardado: con guiones, sin guiones o con el 1
+    const variantes = [...new Set([tel, dig, fmtTel(dig), "1" + dig])];
+    const { data: cliente } = await supabase.from("clientes").select("*").in("telefono", variantes).limit(1).maybeSingle();
     if (cliente) {
       setClienteFound(cliente);
       setForm(f => ({ ...f, nombre: cliente.nombre }));
       const { data: history } = await supabase.from("llamadas_completas").select("*").eq("cliente_id", cliente.id).order("created_at", { ascending: false });
-      if (history && history.length > 0) {
+      if (history?.length) {
         setClienteHistory(history);
         const last = history[0];
         const mun = municipios.find(m => m.nombre === last.municipio);
         const mod = modelos.find(m => m.nombre === last.modelo);
         const ant = antiguedadList.find(a => a.rango === last.antiguedad);
         setForm(f => ({ ...f, nombre: cliente.nombre, municipio_id: mun ? String(mun.id) : "", modelo_id: mod ? String(mod.id) : "", antiguedad_id: ant ? String(ant.id) : "" }));
-      }
+      } else setClienteHistory([]);
     } else { setClienteFound(null); setClienteHistory([]); }
     setSearching(false);
   };
 
+  /* ---------- guardar llamada (y cerrar la perdida si aplica) ---------- */
   const saveCallWith = async (statusNombre, centroDirigido) => {
     const statusId = getStatusId(statusNombre);
     if (!statusId) return;
@@ -321,242 +436,348 @@ export default function App() {
       if (!nc) return;
       clienteId = nc.id;
     }
-    await supabase.from("llamadas").insert({
+    const { data: nueva } = await supabase.from("llamadas").insert({
       cliente_id: clienteId, municipio_id: parseInt(form.municipio_id), modelo_id: parseInt(form.modelo_id),
       antiguedad_id: form.antiguedad_id ? parseInt(form.antiguedad_id) : null,
       status_id: statusId, registrado_por: userId, resuelto_por: statusNombre === "atendido_resuelto" ? userId : null,
       centro_dirigido: centroDirigido || null, problema: form.problema || null
-    });
+    }).select("id").single();
+
+    if (devolviendo) {
+      await supabase.from("llamadas_perdidas").update({
+        estado: "cerrada", resultado: "contestada", cerrada_por: user, cerrada_at: new Date().toISOString(), llamada_id: nueva?.id || null
+      }).eq("id", devolviendo.id);
+      setDevolviendo(null);
+      fetchPerdidas();
+    }
     setSaved(true); fetchRecords();
-    setTimeout(() => { setForm({ telefono: "", nombre: "", municipio_id: "", modelo_id: "", antiguedad_id: "", problema: "" }); setClienteFound(null); setClienteHistory([]); setSaved(false); }, 1800);
+    setTimeout(() => { setForm(FORM0); setClienteFound(null); setClienteHistory([]); setSaved(false); }, 1600);
   };
 
   const canSave = form.nombre && form.telefono && form.municipio_id && form.modelo_id;
 
+  /* ---------- acciones sobre perdidas ---------- */
+  const tomar = async (p) => {
+    await supabase.from("llamadas_perdidas").update({ estado: "tomada", tomada_por: user, tomada_at: new Date().toISOString() }).eq("id", p.id);
+    fetchPerdidas();
+  };
+  const soltar = async (p) => {
+    await supabase.from("llamadas_perdidas").update({ estado: "abierta", tomada_por: null, tomada_at: null }).eq("id", p.id);
+    fetchPerdidas();
+  };
+  const devolver = (p) => {
+    setDevolviendo(p);
+    if (p.estado === "abierta") tomar(p);
+    setForm({ ...FORM0, telefono: fmtTel(p.telefono) });
+    setClienteFound(null); setClienteHistory([]);
+    setTab("llamadas");
+    setTimeout(() => searchPhone(fmtTel(p.telefono)), 50);
+  };
+  const noContestoPerdida = async (p) => {
+    const n = (p.intentos || 0) + 1;
+    const upd = { intentos: n, ultimo_intento: new Date().toISOString(), estado: p.estado === "abierta" ? "tomada" : p.estado, tomada_por: p.tomada_por || user, tomada_at: p.tomada_at || new Date().toISOString() };
+    if (n >= 3) Object.assign(upd, { estado: "cerrada", resultado: "no_contesta", cerrada_por: user, cerrada_at: new Date().toISOString() });
+    await supabase.from("llamadas_perdidas").update(upd).eq("id", p.id);
+    fetchPerdidas();
+  };
+  const cerrarPerdida = async (p, resultado) => {
+    await supabase.from("llamadas_perdidas").update({ estado: "cerrada", resultado, cerrada_por: user, cerrada_at: new Date().toISOString() }).eq("id", p.id);
+    fetchPerdidas();
+  };
+
+  /* ---------- acciones existentes ---------- */
   const updateStatus = async (id, statusNombre) => {
-    const statusId = getStatusId(statusNombre);
-    if (!statusId) return;
+    const statusId = getStatusId(statusNombre); if (!statusId) return;
     await supabase.from("llamadas").update({ status_id: statusId, resuelto_por: userId }).eq("id", id);
     setRecords(prev => prev.map(r => r.id === id ? { ...r, status: statusNombre, resuelto_por: user } : r));
     setOpenId(null);
   };
-
-  const handleNoContesto = async (id, currentIntentos) => {
-    if (currentIntentos >= 1) {
-      const statusId = getStatusId("no_contesto");
-      await supabase.from("llamadas").update({ status_id: statusId, intentos: 2, resuelto_por: userId }).eq("id", id);
+  const handleNoContesto = async (id, intentos) => {
+    if (intentos >= 1) {
+      await supabase.from("llamadas").update({ status_id: getStatusId("no_contesto"), intentos: 2, resuelto_por: userId }).eq("id", id);
       setRecords(prev => prev.map(r => r.id === id ? { ...r, status: "no_contesto", intentos: 2, resuelto_por: user } : r));
     } else {
-      await supabase.from("llamadas").update({ intentos: 1, last_attempt_at: new Date().toISOString() }).eq("id", id);
-      setRecords(prev => prev.map(r => r.id === id ? { ...r, intentos: 1, last_attempt_at: new Date().toISOString() } : r));
+      const now = new Date().toISOString();
+      await supabase.from("llamadas").update({ intentos: 1, last_attempt_at: now }).eq("id", id);
+      setRecords(prev => prev.map(r => r.id === id ? { ...r, intentos: 1, last_attempt_at: now } : r));
     }
     setOpenId(null);
   };
-
   const saveCitaDomicilio = async (id) => {
-    const cf = citaForm[id];
-    if (!cf || !cf.direccion) return;
-    const statusId = getStatusId("cita_domicilio");
-    if (!statusId) return;
+    const cf = citaForm[id]; if (!cf?.direccion) return;
+    const statusId = getStatusId("cita_domicilio"); if (!statusId) return;
     await supabase.from("llamadas").update({ status_id: statusId, direccion: cf.direccion, descripcion_cita: cf.descripcion || null, resuelto_por: userId }).eq("id", id);
     const record = records.find(r => r.id === id);
-    if (record && record.cliente_id) {
-      await supabase.from("clientes").update({ direccion: cf.direccion }).eq("id", record.cliente_id);
-    }
+    if (record?.cliente_id) await supabase.from("clientes").update({ direccion: cf.direccion }).eq("id", record.cliente_id);
     setRecords(prev => prev.map(r => r.id === id ? { ...r, status: "cita_domicilio", direccion: cf.direccion, descripcion_cita: cf.descripcion, resuelto_por: user } : r));
-    setCitaForm(prev => { const n = {...prev}; delete n[id]; return n; });
-    setShowCitaId(null);
-    setOpenId(null);
+    setCitaForm(prev => { const n = { ...prev }; delete n[id]; return n; });
+    setShowCitaId(null); setOpenId(null);
   };
-
   const confirmCita = async (id) => {
-    const statusId = getStatusId("cita_confirmada");
-    await supabase.from("llamadas").update({ status_id: statusId }).eq("id", id);
+    await supabase.from("llamadas").update({ status_id: getStatusId("cita_confirmada") }).eq("id", id);
     setRecords(prev => prev.map(r => r.id === id ? { ...r, status: "cita_confirmada" } : r));
   };
-
   const logout = async () => { await supabase.auth.signOut(); setUserData(null); setRecords([]); };
-
-  const deleteLlamada = async (id) => {
-    if (!confirm("¿Seguro que quieres borrar esta llamada?")) return;
-    await supabase.from("llamadas").delete().eq("id", id);
-    setRecords(prev => prev.filter(r => r.id !== id));
-  };
-
+  const deleteLlamada = async (id) => { if (!confirm("¿Seguro que quieres borrar esta llamada?")) return; await supabase.from("llamadas").delete().eq("id", id); setRecords(prev => prev.filter(r => r.id !== id)); };
   const deleteCliente = async (clienteId, nombre) => {
     if (!confirm("¿Seguro que quieres borrar a " + nombre + " y todas sus llamadas?")) return;
     await supabase.from("llamadas").delete().eq("cliente_id", clienteId);
     await supabase.from("clientes").delete().eq("id", clienteId);
     setRecords(prev => prev.filter(r => r.cliente_id !== clienteId));
   };
-
   const startEdit = (r) => {
-    const mun = municipios.find(m => m.nombre === r.municipio);
-    const mod = modelos.find(m => m.nombre === r.modelo);
-    const ant = antiguedadList.find(a => a.rango === r.antiguedad);
-    const st = statusList.find(s => s.nombre === r.status);
+    const mun = municipios.find(m => m.nombre === r.municipio), mod = modelos.find(m => m.nombre === r.modelo), ant = antiguedadList.find(a => a.rango === r.antiguedad), st = statusList.find(s => s.nombre === r.status);
     setEditId(r.id);
-    setEditForm({
-      nombre: r.cliente_nombre,
-      telefono: r.cliente_telefono,
-      municipio_id: mun ? String(mun.id) : "",
-      modelo_id: mod ? String(mod.id) : "",
-      antiguedad_id: ant ? String(ant.id) : "",
-      status_id: st ? String(st.id) : "",
-      problema: r.problema || "",
-      cliente_id: r.cliente_id
-    });
+    setEditForm({ nombre: r.cliente_nombre, telefono: r.cliente_telefono, municipio_id: mun ? String(mun.id) : "", modelo_id: mod ? String(mod.id) : "", antiguedad_id: ant ? String(ant.id) : "", status_id: st ? String(st.id) : "", problema: r.problema || "", cliente_id: r.cliente_id });
   };
-
   const saveEdit = async (id) => {
-    await supabase.from("clientes").update({
-      nombre: editForm.nombre,
-      telefono: editForm.telefono
-    }).eq("id", editForm.cliente_id);
-
-    await supabase.from("llamadas").update({
-      municipio_id: parseInt(editForm.municipio_id),
-      modelo_id: parseInt(editForm.modelo_id),
-      antiguedad_id: editForm.antiguedad_id ? parseInt(editForm.antiguedad_id) : null,
-      problema: editForm.problema || null
-    }).eq("id", id);
-
-    setEditId(null);
-    setEditForm({});
-    fetchRecords();
+    await supabase.from("clientes").update({ nombre: editForm.nombre, telefono: editForm.telefono }).eq("id", editForm.cliente_id);
+    await supabase.from("llamadas").update({ municipio_id: parseInt(editForm.municipio_id), modelo_id: parseInt(editForm.modelo_id), antiguedad_id: editForm.antiguedad_id ? parseInt(editForm.antiguedad_id) : null, problema: editForm.problema || null }).eq("id", id);
+    setEditId(null); setEditForm({}); fetchRecords();
   };
 
+  /* ---------- derivados ---------- */
   const pendingCount = records.filter(r => r.status === "pendiente_willy").length;
   const citasCount = records.filter(r => r.status === "cita_domicilio").length;
+  const perdidasCount = perdidas.length;
   const myResolved = records.filter(r => r.resuelto_por === user).length;
 
   let tabs = [];
-  if (role === "agent") tabs = ["llamadas", "queue", "citas", "historial"];
+  if (role === "agent") tabs = ["llamadas", "perdidas", "queue", "citas", "historial"];
   else if (role === "tech") tabs = ["queue", "citas", "stats", "historial"];
-  else if (role === "admin") tabs = ["dashboard", "llamadas", "queue", "citas", "stats", "historial"];
+  else if (role === "admin") tabs = ["dashboard", "llamadas", "perdidas", "queue", "citas", "stats", "historial"];
   if (user === "Carlos" && !tabs.includes("dashboard")) tabs = ["dashboard", ...tabs];
+  const tabLabels = { llamadas: "Nueva llamada", perdidas: "Por devolver", queue: "Queue", citas: "Citas", historial: "Historial", dashboard: "Dashboard", stats: "Estadísticas" };
+  const tabBadge = { perdidas: perdidasCount, queue: pendingCount, citas: citasCount };
 
-  const tabLabels = { llamadas: "Nueva llamada", queue: "Queue", citas: "Citas", historial: "Historial", dashboard: "Dashboard", stats: "Estadísticas" };
-  const tabColors = { llamadas: "#534AB7", queue: "#854F0B", citas: "#185FA5", historial: "#5F5E5A", dashboard: "#0F6E56", stats: "#534AB7" };
+  const munGroups = useMemo(() => {
+    const g = {};
+    municipios.forEach(m => { const z = m.zona || "Otras áreas"; (g[z] = g[z] || []).push(m); });
+    return g;
+  }, [municipios]);
+  const modelGroups = useMemo(() => {
+    const g = {};
+    modelos.forEach(m => { const k = m.subcategoria ? `${m.categoria} — ${m.subcategoria}` : m.categoria; (g[k] = g[k] || []).push(m); });
+    return g;
+  }, [modelos]);
 
-  // Grouped data for searchable selects
-  const munGroups = { "Área Metro": [], "Oeste / Sur": [], "Otras áreas": [] };
-  municipios.forEach(m => { if (m.zona === "Metro") munGroups["Área Metro"].push(m); else if (m.zona === "Oeste/Sur") munGroups["Oeste / Sur"].push(m); else munGroups["Otras áreas"].push(m); });
-
-  const modelGroups = {};
-  modelos.forEach(m => { const key = m.subcategoria ? m.categoria + " — " + m.subcategoria : m.categoria; if (!modelGroups[key]) modelGroups[key] = []; modelGroups[key].push(m); });
-
+  /* =================================================================
+     RENDER
+     ================================================================= */
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto", padding: "0 12px 40px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 8, background: "#534AB7", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 15, fontWeight: 700 }}>M</div>
-          <span style={{ fontSize: 16, fontWeight: 600 }}>{user}</span>
-          {myResolved > 0 && <span style={{ padding: "2px 10px", borderRadius: 10, fontSize: 12, fontWeight: 600, background: "#EAF3DE", color: "#3B6D11" }}>{myResolved} atendidas</span>}
-        </div>
-        <button onClick={logout} style={{ padding: "8px 16px", borderRadius: 10, border: "2px solid #e0e0e0", background: "#fff", fontSize: 14, fontWeight: 500, cursor: "pointer", color: "#888" }}>Salir</button>
-      </div>
+    <div style={S.page}>
+      <GlobalCss />
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 24, overflowX: "auto", paddingBottom: 4 }}>
-        {tabs.map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: "12px 18px", borderRadius: 12, border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", position: "relative", background: tab === t ? tabColors[t] : "#f0f0f0", color: tab === t ? "#fff" : "#888" }}>
-            {tabLabels[t]}
-            {t === "queue" && pendingCount > 0 && <span style={{ position: "absolute", top: -4, right: -4, background: "#E24B4A", color: "#fff", borderRadius: 12, fontSize: 11, fontWeight: 700, padding: "2px 7px" }}>{pendingCount}</span>}
-            {t === "citas" && citasCount > 0 && <span style={{ position: "absolute", top: -4, right: -4, background: "#854F0B", color: "#fff", borderRadius: 12, fontSize: 11, fontWeight: 700, padding: "2px 7px" }}>{citasCount}</span>}
-          </button>
-        ))}
-      </div>
-
-      {tab === "llamadas" && (
-        <div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <label style={labelStyle}>Teléfono</label>
-              <input style={inputStyle} value={form.telefono} onChange={e => setForm({...form, telefono: e.target.value})} onBlur={e => searchPhone(e.target.value)} placeholder="787-000-0000" />
-              {searching && <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>Buscando...</div>}
-            </div>
-            {clienteFound && (
-              <div style={{ padding: "12px 16px", borderRadius: 12, background: "#E1F5EE", border: "1px solid #0F6E56" }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#0F6E56" }}>Cliente encontrado — {clienteHistory.length} llamada{clienteHistory.length !== 1 ? "s" : ""} previa{clienteHistory.length !== 1 ? "s" : ""}</div>
-                {clienteFound.direccion && <div style={{ fontSize: 13, color: "#0F6E56", marginTop: 4 }}>Dirección: {clienteFound.direccion}</div>}
-                {clienteHistory.length > 0 && <div style={{ marginTop: 8 }}>{clienteHistory.slice(0, 5).map(h => (
-                  <div key={h.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#0F6E56", padding: "3px 0", borderBottom: "1px solid rgba(15,110,86,0.15)" }}>
-                    <span>{fmtDate(h.created_at)} — {h.problema || "Sin problema"}</span><Badge status={h.status} centro={h.centro_dirigido} />
-                  </div>
-                ))}</div>}
-              </div>
-            )}
-            <div><label style={labelStyle}>Nombre</label><input style={inputStyle} value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Nombre del cliente" /></div>
-            <SearchSelect label="Pueblo" value={form.municipio_id} onChange={v => setForm({...form, municipio_id: v})} groups={munGroups} placeholder="Escribe para buscar pueblo..." />
-            <SearchSelect label="Modelo" value={form.modelo_id} onChange={v => setForm({...form, modelo_id: v})} groups={modelGroups} placeholder="Escribe para buscar modelo..." />
-            <div>
-              <label style={labelStyle}>¿Hace cuánto tiene la unidad?</label>
-              <select style={{ ...inputStyle, appearance: "auto", cursor: "pointer" }} value={form.antiguedad_id} onChange={e => setForm({...form, antiguedad_id: e.target.value})}>
-                <option value="">-- Seleccionar --</option>
-                {antiguedadList.map(a => <option key={a.id} value={a.id}>{a.rango}</option>)}
-              </select>
-            </div>
-            <div><label style={labelStyle}>Problema</label><input style={inputStyle} value={form.problema} onChange={e => setForm({...form, problema: e.target.value})} placeholder="Breve descripción" /></div>
+      {/* header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0 12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 11, background: C.navy, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 16, fontWeight: 800 }}>M</div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.1 }}>{user}</div>
+            <div style={{ fontSize: 12, color: C.muted }}>{role === "admin" ? "Administración" : role === "tech" ? "Técnico" : "Servicio al cliente"}{myResolved > 0 ? ` · ${myResolved} atendidas` : ""}</div>
           </div>
-          {canSave && !saved && (
-            <div style={{ marginTop: 24 }}>
-              <label style={{ ...labelStyle, fontSize: 16, marginBottom: 12 }}>¿Qué pasó con la llamada?</label>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <button onClick={() => saveCallWith("dirigido", "San Juan")} style={bigBtn("#0F6E56")}>ENVIADO A SAN JUAN</button>
-                <button onClick={() => saveCallWith("dirigido", "San Germán")} style={bigBtn("#185FA5")}>ENVIADO A SAN GERMÁN</button>
-                <button onClick={() => saveCallWith("pendiente_willy", null)} style={bigBtn("#854F0B")}>REFERIDO A TÉCNICOS</button>
-                <button onClick={() => saveCallWith("atendido_resuelto", null)} style={bigBtn("#3B6D11")}>SE RESOLVIÓ</button>
-              </div>
-            </div>
-          )}
-          {saved && <div style={{ textAlign: "center", marginTop: 20, fontSize: 16, fontWeight: 600, color: "#0F6E56" }}>GUARDADO</div>}
+        </div>
+        <button onClick={logout} style={S.small}>Salir</button>
+      </div>
+
+      {/* banner de llamada perdida */}
+      {aviso && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, background: C.navyDark, color: "#fff", marginBottom: 12, animation: "bajar .25s ease-out", boxShadow: "0 10px 30px rgba(15,36,56,.25)" }}>
+          <div style={{ width: 10, height: 10, borderRadius: 5, background: "#F87171", animation: "latir 1.4s infinite", flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>{aviso.tiene_voicemail ? "Voicemail nuevo" : aviso.tipo === "repite" ? `Volvió a llamar (${aviso.veces} veces)` : "Llamada perdida"}</div>
+            <div style={{ fontSize: 13, opacity: .85, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtTel(aviso.telefono)}{aviso.nombre_cid ? ` · ${aviso.nombre_cid}` : ""}</div>
+          </div>
+          <button onClick={() => { setTab("perdidas"); setAviso(null); }} style={{ ...S.small, background: "#fff", color: C.navy, border: "none" }}>Ver</button>
+          <button onClick={() => setAviso(null)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.7)", fontSize: 18, cursor: "pointer", padding: "0 4px" }}>×</button>
         </div>
       )}
 
+      {/* tabs */}
+      <div className="tabs" style={{ display: "flex", gap: 6, marginBottom: 20, overflowX: "auto", paddingBottom: 2 }}>
+        {tabs.map(t => {
+          const n = tabBadge[t] || 0;
+          const on = tab === t;
+          return (
+            <button key={t} onClick={() => setTab(t)} style={{ padding: "10px 14px", borderRadius: 999, border: `1px solid ${on ? C.navy : C.line}`, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", background: on ? C.navy : "#fff", color: on ? "#fff" : C.text, fontFamily: FONT, display: "inline-flex", alignItems: "center", gap: 8 }}>
+              {tabLabels[t]}
+              {n > 0 && <span style={{ minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10, fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", background: t === "perdidas" ? C.red : (on ? "rgba(255,255,255,.25)" : C.slateBg), color: t === "perdidas" ? "#fff" : (on ? "#fff" : C.text) }}>{n}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ============ NUEVA LLAMADA ============ */}
+      {tab === "llamadas" && (
+        <div>
+          {devolviendo && (
+            <div style={{ ...S.card, background: C.amberBg, borderColor: "#FCD34D", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>Devolviendo llamada perdida</div>
+                <div style={{ fontSize: 13, color: C.amber }}>{fmtTel(devolviendo.telefono)}{devolviendo.nombre_cid ? ` · ${devolviendo.nombre_cid}` : ""} · llamó {devolviendo.veces} {devolviendo.veces === 1 ? "vez" : "veces"}</div>
+              </div>
+              <button onClick={() => { setDevolviendo(null); setForm(FORM0); setClienteFound(null); setClienteHistory([]); }} style={S.small}>Cancelar</button>
+            </div>
+          )}
+          <div style={S.card}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={S.label}>Teléfono</label>
+                <input style={S.input} value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} onBlur={e => searchPhone(e.target.value)} placeholder="787-000-0000" inputMode="tel" />
+                {searching && <div style={{ ...S.sub, marginTop: 6 }}>Buscando...</div>}
+              </div>
+              {clienteFound && (
+                <div style={{ padding: "12px 14px", borderRadius: 12, background: C.greenBg }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>Cliente conocido · {clienteHistory.length} llamada{clienteHistory.length !== 1 ? "s" : ""} previa{clienteHistory.length !== 1 ? "s" : ""}</div>
+                  {clienteFound.direccion && <div style={{ fontSize: 13, color: C.green, marginTop: 2 }}>{clienteFound.direccion}</div>}
+                  {clienteHistory.slice(0, 5).map(h => (
+                    <div key={h.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: C.green, padding: "6px 0", borderTop: "1px solid rgba(22,101,52,.15)" }}>
+                      <span>{fmtDate(h.created_at)} — {h.problema || "Sin problema"}</span><Badge status={h.status} centro={h.centro_dirigido} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div><label style={S.label}>Nombre</label><input style={S.input} value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Nombre del cliente" /></div>
+              <SearchSelect label="Pueblo" value={form.municipio_id} onChange={v => setForm({ ...form, municipio_id: v })} groups={munGroups} placeholder="Escribe para buscar pueblo" />
+              <SearchSelect label="Modelo" value={form.modelo_id} onChange={v => setForm({ ...form, modelo_id: v })} groups={modelGroups} placeholder="Escribe para buscar modelo" />
+              <div>
+                <label style={S.label}>Tiempo con la unidad</label>
+                <select style={{ ...S.input, appearance: "auto", cursor: "pointer" }} value={form.antiguedad_id} onChange={e => setForm({ ...form, antiguedad_id: e.target.value })}>
+                  <option value="">Seleccionar</option>
+                  {antiguedadList.map(a => <option key={a.id} value={a.id}>{a.rango}</option>)}
+                </select>
+              </div>
+              <div><label style={S.label}>Problema</label><input style={S.input} value={form.problema} onChange={e => setForm({ ...form, problema: e.target.value })} placeholder="Breve descripción" /></div>
+            </div>
+          </div>
+
+          {canSave && !saved && (
+            <div style={S.card}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>¿Qué pasó con la llamada?</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <button onClick={() => saveCallWith("dirigido", "San Juan")} style={S.btn("green")}>Enviado a San Juan</button>
+                <button onClick={() => saveCallWith("dirigido", "San Germán")} style={S.btn("blue")}>Enviado a San Germán</button>
+                <button onClick={() => saveCallWith("pendiente_willy", null)} style={S.btn("amber")}>Referido a técnicos</button>
+                <button onClick={() => saveCallWith("atendido_resuelto", null)} style={S.btn("primary")}>Se resolvió</button>
+              </div>
+            </div>
+          )}
+          {saved && <div style={{ ...S.card, textAlign: "center", color: C.green, fontWeight: 700, background: C.greenBg, borderColor: C.greenBg }}>Guardado</div>}
+        </div>
+      )}
+
+      {/* ============ POR DEVOLVER (llamadas perdidas) ============ */}
+      {tab === "perdidas" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <div style={S.h2}>Por devolver</div>
+            <div style={S.sub}>{perdidas.length === 0 ? "Nada pendiente" : `${perdidas.length} pendiente${perdidas.length !== 1 ? "s" : ""}`}</div>
+          </div>
+
+          {perdidas.length === 0 && <Empty titulo="Todo devuelto" texto="Cuando entre una llamada perdida o un voicemail aparece aquí y suena un aviso." />}
+
+          {perdidas.map(p => {
+            const mia = p.tomada_por === user;
+            const urgente = (Date.now() - new Date(p.primera_llamada).getTime()) > 15 * 60000 && p.estado === "abierta";
+            return (
+              <div key={p.id} style={{ ...S.card, borderColor: urgente ? "#FCA5A5" : C.line }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3 }}>{fmtTel(p.telefono)}</div>
+                    {p.nombre_cid && <div style={{ fontSize: 13, color: C.muted, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nombre_cid}</div>}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                      <span style={S.pill(p.tiene_voicemail ? C.violetBg : C.amberBg, p.tiene_voicemail ? C.violet : C.amber)}>{p.tiene_voicemail ? "Voicemail" : "Perdida"}</span>
+                      {p.veces > 1 && <span style={S.pill(C.redBg, C.red)}>Llamó {p.veces} veces</span>}
+                      {p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>Intento {p.intentos} de 3</span>}
+                      {p.estado === "tomada" && <span style={S.pill(C.blueBg, C.blue)}>{mia ? "La tienes tú" : `La tiene ${p.tomada_por}`}</span>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: urgente ? C.red : C.text }}>{hace(p.ultima_llamada)}</div>
+                    <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{fmtDate(p.ultima_llamada)}</div>
+                  </div>
+                </div>
+
+                {p.voicemail_url && (
+                  <div style={{ marginTop: 12 }}>
+                    {audioUrls[p.id] ? <audio controls src={audioUrls[p.id]} style={{ width: "100%" }} /> :
+                      <button onClick={() => urlAudio(p)} style={S.btn("ghost")}>Escuchar voicemail{p.voicemail_seg ? ` (${p.voicemail_seg}s)` : ""}</button>}
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 14 }}>
+                  {p.estado === "abierta"
+                    ? <button onClick={() => tomar(p)} style={S.btn("ghost")}>La tomo</button>
+                    : <button onClick={() => soltar(p)} style={S.btn("ghost")}>Soltar</button>}
+                  <button onClick={() => devolver(p)} style={S.btn("primary")}>Devolver llamada</button>
+                  <button onClick={() => noContestoPerdida(p)} style={S.btn("amber")}>{(p.intentos || 0) >= 2 ? "No contestó · cerrar" : "No contestó"}</button>
+                  <button onClick={() => cerrarPerdida(p, "spam")} style={S.btn("ghost")}>Spam / no aplica</button>
+                </div>
+                {p.cola && <div style={{ fontSize: 11, color: C.faint, marginTop: 10 }}>Cola {p.cola}{p.cola_ext ? ` (${p.cola_ext})` : ""}</div>}
+              </div>
+            );
+          })}
+
+          {perdidasCerradas.length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: .4, marginBottom: 10 }}>Devueltas · últimos 7 días</div>
+              {perdidasCerradas.map(p => {
+                const res = { contestada: ["Devuelta", C.greenBg, C.green], no_contesta: ["No contestó", C.redBg, C.red], spam: ["Spam", C.slateBg, C.text], no_aplica: ["No aplica", C.slateBg, C.text] }[p.resultado] || [p.resultado, C.slateBg, C.text];
+                return (
+                  <div key={p.id} style={{ ...S.card, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700 }}>{fmtTel(p.telefono)}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{p.cerrada_por || "—"} · {p.minutos_respuesta != null ? `${Math.round(p.minutos_respuesta)} min` : ""} · {fmtDate(p.cerrada_at)}</div>
+                    </div>
+                    <span style={S.pill(res[1], res[2])}>{res[0]}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============ QUEUE ============ */}
       {tab === "queue" && (
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Queue</div>
-          <TimeFilter value={queueFilter} onChange={setQueueFilter} dateRange={queueDateRange} onDateRange={setQueueDateRange} />
+          <div style={S.h2}>Queue</div>
+          <TimeFilter value={filters.queue} onChange={v => setF("queue", v)} dateRange={ranges.queue} onDateRange={v => setR("queue", v)} />
           {(() => {
-            const filtered = filterByTime(records.filter(r => r.status === "pendiente_willy"), queueFilter, queueDateRange).sort((a,b) => new Date(a.last_attempt_at || a.created_at) - new Date(b.last_attempt_at || b.created_at));
-            if (filtered.length === 0) return <div style={{ textAlign: "center", padding: "60px 20px" }}><div style={{ fontSize: 48, marginBottom: 12 }}>&#10003;</div><div style={{ fontSize: 18, fontWeight: 600, color: "#0F6E56" }}>Todo al día</div></div>;
+            const filtered = filterByTime(records.filter(r => r.status === "pendiente_willy"), filters.queue, ranges.queue).sort((a, b) => new Date(a.last_attempt_at || a.created_at) - new Date(b.last_attempt_at || b.created_at));
+            if (!filtered.length) return <Empty titulo="Todo al día" />;
             return filtered.map(r => {
-              const hrs = hrsLeft(r.last_attempt_at || r.created_at);
-              const urgent = parseInt(hrs) < 6;
-              const open = openId === r.id;
+              const hrs = hrsLeft(r.last_attempt_at || r.created_at), urgent = parseInt(hrs) < 6, open = openId === r.id;
               return (
-                <div key={r.id} style={{ ...cardStyle, borderColor: urgent ? "#F09595" : "#e8e8e8" }}>
-                  <div onClick={() => setOpenId(open ? null : r.id)} style={{ cursor: "pointer" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div>
-                        <div style={{ fontSize: 17, fontWeight: 600 }}>{r.cliente_nombre}</div>
-                        <div style={{ fontSize: 14, color: "#888", marginTop: 4 }}>{r.cliente_telefono}</div>
-                        <div style={{ fontSize: 14, color: "#888" }}>{r.municipio} — {r.modelo}</div>
-                        <div style={{ fontSize: 14, color: "#666", marginTop: 2 }}>{r.problema}</div>
-                        {r.antiguedad && <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>Tiempo con la unidad: {r.antiguedad}</div>}
-                        {r.intentos > 0 && <div style={{ marginTop: 4, padding: "3px 10px", borderRadius: 8, background: "#FCEBEB", color: "#A32D2D", fontSize: 12, fontWeight: 600, display: "inline-block" }}>Intento {r.intentos} de 2</div>}
-                      </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <div style={{ padding: "6px 14px", borderRadius: 10, fontSize: 15, fontWeight: 700, background: urgent ? "#FCEBEB" : "#FAEEDA", color: urgent ? "#A32D2D" : "#854F0B" }}>{hrs}h</div>
-                        <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>{r.registrado_por}</div>
-                      </div>
+                <div key={r.id} style={{ ...S.card, borderColor: urgent ? "#FCA5A5" : C.line }}>
+                  <div onClick={() => setOpenId(open ? null : r.id)} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 17, fontWeight: 700 }}>{r.cliente_nombre}</div>
+                      <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>{fmtTel(r.cliente_telefono)} · {r.municipio} · {r.modelo}</div>
+                      {r.problema && <div style={{ fontSize: 14, color: C.text, marginTop: 4 }}>{r.problema}</div>}
+                      {r.antiguedad && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Tiempo con la unidad: {r.antiguedad}</div>}
+                      {r.intentos > 0 && <div style={{ marginTop: 6 }}><span style={S.pill(C.redBg, C.red)}>Intento {r.intentos} de 2</span></div>}
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <span style={S.pill(urgent ? C.redBg : C.amberBg, urgent ? C.red : C.amber)}>{hrs} h</span>
+                      <div style={{ fontSize: 11, color: C.faint, marginTop: 6 }}>{r.registrado_por}</div>
                     </div>
                   </div>
                   {open && (
                     <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
                       {showCitaId === r.id ? (
                         <>
-                          <div><label style={labelStyle}>Dirección del cliente</label><input style={inputStyle} value={(citaForm[r.id] || {}).direccion || ""} onChange={e => setCitaForm(prev => ({...prev, [r.id]: {...(prev[r.id] || {}), direccion: e.target.value}}))} placeholder="Dirección completa" /></div>
-                          <div><label style={labelStyle}>¿Qué trabajo vas a realizar?</label><input style={inputStyle} value={(citaForm[r.id] || {}).descripcion || ""} onChange={e => setCitaForm(prev => ({...prev, [r.id]: {...(prev[r.id] || {}), descripcion: e.target.value}}))} placeholder="Descripción breve del trabajo" /></div>
-                          <button onClick={() => saveCitaDomicilio(r.id)} disabled={!(citaForm[r.id] || {}).direccion} style={bigBtn((citaForm[r.id] || {}).direccion ? "#185FA5" : "#ccc")}>CONFIRMAR CITA</button>
-                          <button onClick={() => { setShowCitaId(null); setCitaForm(prev => { const n = {...prev}; delete n[r.id]; return n; }); }} style={{ ...bigBtn("#f0f0f0"), color: "#888" }}>CANCELAR</button>
+                          <div><label style={S.label}>Dirección del cliente</label><input style={S.input} value={(citaForm[r.id] || {}).direccion || ""} onChange={e => setCitaForm(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), direccion: e.target.value } }))} placeholder="Dirección completa" /></div>
+                          <div><label style={S.label}>Trabajo a realizar</label><input style={S.input} value={(citaForm[r.id] || {}).descripcion || ""} onChange={e => setCitaForm(prev => ({ ...prev, [r.id]: { ...(prev[r.id] || {}), descripcion: e.target.value } }))} placeholder="Descripción breve" /></div>
+                          <button onClick={() => saveCitaDomicilio(r.id)} disabled={!(citaForm[r.id] || {}).direccion} style={S.btn((citaForm[r.id] || {}).direccion ? "blue" : "disabled")}>Confirmar cita</button>
+                          <button onClick={() => { setShowCitaId(null); setCitaForm(prev => { const n = { ...prev }; delete n[r.id]; return n; }); }} style={S.btn("ghost")}>Cancelar</button>
                         </>
                       ) : (
                         <>
-                          <button onClick={() => updateStatus(r.id, "atendido_resuelto")} style={bigBtn("#0F6E56")}>RESUELTO</button>
-                          <button onClick={() => updateStatus(r.id, "atendido_cita_marey")} style={bigBtn("#534AB7")}>SE CITÓ A MAREY</button>
-                          <button onClick={() => setShowCitaId(r.id)} style={bigBtn("#185FA5")}>CITA A DOMICILIO</button>
-                          <button onClick={() => handleNoContesto(r.id, r.intentos || 0)} style={bigBtn("#888")}>NO CONTESTÓ {r.intentos > 0 ? "(ÚLTIMO INTENTO)" : ""}</button>
+                          <button onClick={() => updateStatus(r.id, "atendido_resuelto")} style={S.btn("green")}>Resuelto</button>
+                          <button onClick={() => updateStatus(r.id, "atendido_cita_marey")} style={S.btn("violet")}>Se citó a Marey</button>
+                          <button onClick={() => setShowCitaId(r.id)} style={S.btn("blue")}>Cita a domicilio</button>
+                          <button onClick={() => handleNoContesto(r.id, r.intentos || 0)} style={S.btn("ghost")}>No contestó{r.intentos > 0 ? " · último intento" : ""}</button>
                         </>
                       )}
                     </div>
@@ -568,78 +789,65 @@ export default function App() {
         </div>
       )}
 
+      {/* ============ CITAS ============ */}
       {tab === "citas" && (
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Citas a domicilio</div>
-          <TimeFilter value={citasFilter} onChange={setCitasFilter} dateRange={citasDateRange} onDateRange={setCitasDateRange} />
+          <div style={S.h2}>Citas a domicilio</div>
+          <TimeFilter value={filters.citas} onChange={v => setF("citas", v)} dateRange={ranges.citas} onDateRange={v => setR("citas", v)} />
           {(() => {
-            const filtered = filterByTime(records.filter(r => r.status === "cita_domicilio" || r.status === "cita_confirmada"), citasFilter, citasDateRange)
-              .sort((a,b) => { if (a.status === "cita_domicilio" && b.status !== "cita_domicilio") return -1; if (a.status !== "cita_domicilio" && b.status === "cita_domicilio") return 1; return 0; });
-            if (filtered.length === 0) return <div style={{ textAlign: "center", padding: "40px 20px", color: "#888" }}>No hay citas para este período</div>;
-            return filtered.map(r => {
-              const cf = citaForm[r.id] || { direccion: "", descripcion: "" };
-              return (
-                <div key={r.id} style={{ ...cardStyle, borderColor: r.status === "cita_domicilio" ? "#FAEEDA" : "#EAF3DE", borderWidth: 2 }}>
-                  <div>
-                    <div style={{ fontSize: 17, fontWeight: 600 }}>{r.cliente_nombre}</div>
-                    <div style={{ fontSize: 14, color: "#888", marginTop: 4 }}>{r.cliente_telefono} — {r.municipio}</div>
-                    <div style={{ fontSize: 14, color: "#666" }}>{r.modelo} — {r.problema}</div>
-                    {r.antiguedad && <div style={{ fontSize: 13, color: "#888" }}>Tiempo con la unidad: {r.antiguedad}</div>}
-                    {r.direccion && <div style={{ fontSize: 14, color: "#333", marginTop: 6 }}>Dirección: {r.direccion}</div>}
-                    {r.descripcion_cita && <div style={{ fontSize: 14, color: "#333", marginTop: 2 }}>Trabajo: {r.descripcion_cita}</div>}
-                    <div style={{ fontSize: 12, color: "#aaa", marginTop: 4 }}>Por: {r.registrado_por} — {fmtDate(r.created_at)}</div>
-                    {role === "admin" && (
-                      <button onClick={() => deleteLlamada(r.id)} style={{ marginTop: 6, padding: "4px 12px", borderRadius: 8, border: "1px solid #E24B4A", background: "#FCEBEB", color: "#A32D2D", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Borrar cita</button>
-                    )}
+            const filtered = filterByTime(records.filter(r => r.status === "cita_domicilio" || r.status === "cita_confirmada"), filters.citas, ranges.citas)
+              .sort((a, b) => (a.status === "cita_domicilio" ? 0 : 1) - (b.status === "cita_domicilio" ? 0 : 1));
+            if (!filtered.length) return <Empty titulo="No hay citas en este período" />;
+            return filtered.map(r => (
+              <div key={r.id} style={S.card}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 17, fontWeight: 700 }}>{r.cliente_nombre}</div>
+                    <div style={{ fontSize: 14, color: C.muted, marginTop: 2 }}>{fmtTel(r.cliente_telefono)} · {r.municipio}</div>
+                    <div style={{ fontSize: 14, color: C.text }}>{r.modelo}{r.problema ? ` · ${r.problema}` : ""}</div>
+                    {r.direccion && <div style={{ fontSize: 14, color: C.ink, marginTop: 6 }}>{r.direccion}</div>}
+                    {r.descripcion_cita && <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>Trabajo: {r.descripcion_cita}</div>}
+                    <div style={{ fontSize: 12, color: C.faint, marginTop: 6 }}>{r.registrado_por} · {fmtDate(r.created_at)}</div>
                   </div>
-                  {r.status === "cita_domicilio" && user === "Anthony" && (
-                    <div style={{ marginTop: 14 }}>
-                      <button onClick={() => confirmCita(r.id)} style={bigBtn("#854F0B")}>CONFIRMAR EN PLANNER</button>
-                    </div>
-                  )}
-                  {r.status === "cita_domicilio" && user !== "Anthony" && (
-                    <div style={{ marginTop: 10, padding: "10px 16px", borderRadius: 12, background: "#FAEEDA", color: "#854F0B", fontSize: 14, fontWeight: 700, textAlign: "center" }}>PENDIENTE</div>
-                  )}
-                  {r.status === "cita_confirmada" && (
-                    <div style={{ marginTop: 10, padding: "10px 16px", borderRadius: 12, background: "#EAF3DE", textAlign: "center" }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#3B6D11" }}>CONFIRMADA</div>
-                    </div>
-                  )}
+                  <Badge status={r.status} />
                 </div>
-              );
-            });
+                {r.status === "cita_domicilio" && user === "Anthony" && <button onClick={() => confirmCita(r.id)} style={{ ...S.btn("amber"), marginTop: 12 }}>Confirmar en Planner</button>}
+                {r.status === "cita_domicilio" && user !== "Anthony" && <div style={{ marginTop: 12, padding: "10px", borderRadius: 12, background: C.amberBg, color: C.amber, fontSize: 13, fontWeight: 700, textAlign: "center" }}>Pendiente de confirmar</div>}
+                {role === "admin" && <button onClick={() => deleteLlamada(r.id)} style={{ ...S.small, marginTop: 10, color: C.red }}>Borrar cita</button>}
+              </div>
+            ));
           })()}
         </div>
       )}
 
+      {/* ============ ESTADISTICAS ============ */}
       {tab === "stats" && (
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Estadísticas por técnico</div>
-          <TimeFilter value={statsFilter} onChange={setStatsFilter} dateRange={statsDateRange} onDateRange={setStatsDateRange} />
+          <div style={S.h2}>Estadísticas por técnico</div>
+          <TimeFilter value={filters.stats} onChange={v => setF("stats", v)} dateRange={ranges.stats} onDateRange={v => setR("stats", v)} />
           {(() => {
-            const filtered = filterByTime(records.filter(r => r.resuelto_por), statsFilter, statsDateRange);
-            const byUser = {};
+            const filtered = filterByTime(records.filter(r => r.resuelto_por), filters.stats, ranges.stats);
+            const by = {};
             filtered.forEach(r => {
-              if (!byUser[r.resuelto_por]) byUser[r.resuelto_por] = { total: 0, resueltas: 0, citados_marey: 0, citas_domicilio: 0, no_contestaron: 0 };
-              byUser[r.resuelto_por].total++;
-              if (r.status === "atendido_resuelto") byUser[r.resuelto_por].resueltas++;
-              if (r.status === "atendido_cita_marey") byUser[r.resuelto_por].citados_marey++;
-              if (r.status === "cita_domicilio" || r.status === "cita_confirmada") byUser[r.resuelto_por].citas_domicilio++;
-              if (r.status === "no_contesto") byUser[r.resuelto_por].no_contestaron++;
+              const u = by[r.resuelto_por] = by[r.resuelto_por] || { total: 0, resueltas: 0, citados: 0, domicilio: 0, no: 0 };
+              u.total++;
+              if (r.status === "atendido_resuelto") u.resueltas++;
+              if (r.status === "atendido_cita_marey") u.citados++;
+              if (r.status === "cita_domicilio" || r.status === "cita_confirmada") u.domicilio++;
+              if (r.status === "no_contesto") u.no++;
             });
-            const sorted = Object.entries(byUser).sort((a,b) => b[1].total - a[1].total);
-            if (sorted.length === 0) return <div style={{ textAlign: "center", padding: "40px 20px", color: "#888" }}>No hay estadísticas para este período</div>;
+            const sorted = Object.entries(by).sort((a, b) => b[1].total - a[1].total);
+            if (!sorted.length) return <Empty titulo="Sin datos en este período" />;
             return sorted.map(([nombre, s]) => (
-              <div key={nombre} style={{ ...cardStyle, borderColor: nombre === user ? "#534AB7" : "#e8e8e8" }}>
+              <div key={nombre} style={{ ...S.card, borderColor: nombre === user ? C.navy : C.line }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontSize: 17, fontWeight: 600 }}>{nombre}</div>
-                  <div style={{ padding: "4px 14px", borderRadius: 10, fontSize: 18, fontWeight: 700, background: "#534AB7", color: "#fff" }}>{s.total}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>{nombre}</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: C.navy }}>{s.total}</div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <div style={{ padding: "10px", borderRadius: 10, background: "#EAF3DE", textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "#3B6D11" }}>{s.resueltas}</div><div style={{ fontSize: 11, color: "#3B6D11" }}>Resueltas</div></div>
-                  <div style={{ padding: "10px", borderRadius: 10, background: "#EEEDFE", textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "#534AB7" }}>{s.citados_marey}</div><div style={{ fontSize: 11, color: "#534AB7" }}>Citados Marey</div></div>
-                  <div style={{ padding: "10px", borderRadius: 10, background: "#FAEEDA", textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "#854F0B" }}>{s.citas_domicilio}</div><div style={{ fontSize: 11, color: "#854F0B" }}>Citas domicilio</div></div>
-                  <div style={{ padding: "10px", borderRadius: 10, background: "#FCEBEB", textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 700, color: "#A32D2D" }}>{s.no_contestaron}</div><div style={{ fontSize: 11, color: "#A32D2D" }}>No contestaron</div></div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                  {[["Resueltas", s.resueltas, C.greenBg, C.green], ["Citados", s.citados, C.violetBg, C.violet], ["Domicilio", s.domicilio, C.amberBg, C.amber], ["No contestó", s.no, C.redBg, C.red]].map(([l, v, b, c]) => (
+                    <div key={l} style={{ padding: "10px 6px", borderRadius: 12, background: b, textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 11, color: c, fontWeight: 600 }}>{l}</div></div>
+                  ))}
                 </div>
               </div>
             ));
@@ -647,56 +855,54 @@ export default function App() {
         </div>
       )}
 
+      {/* ============ HISTORIAL ============ */}
       {tab === "historial" && (
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Historial</div>
-          <TimeFilter value={histFilter} onChange={setHistFilter} dateRange={histDateRange} onDateRange={setHistDateRange} />
+          <div style={S.h2}>Historial</div>
+          <TimeFilter value={filters.hist} onChange={v => setF("hist", v)} dateRange={ranges.hist} onDateRange={v => setR("hist", v)} />
           {(() => {
-            const filtered = filterByTime(records.filter(r => r.status !== "pendiente_willy"), histFilter, histDateRange).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-            if (filtered.length === 0) return <div style={{ textAlign: "center", padding: "40px 20px", color: "#888" }}>No hay registros para este período</div>;
+            const filtered = filterByTime(records.filter(r => r.status !== "pendiente_willy"), filters.hist, ranges.hist).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            if (!filtered.length) return <Empty titulo="No hay registros en este período" />;
             return filtered.map(r => {
-              const s = STATUS_COLORS[r.status] || { t: r.status, c: "#888", b: "#f0f0f0" };
-              let label = s.t;
+              let label = (STATUS[r.status] || { t: r.status }).t;
               if (r.status === "dirigido" && r.centro_dirigido) label = "Dirigido a " + r.centro_dirigido;
-              if (r.status === "no_contesto" && r.intentos) label = "No contestó (" + r.intentos + " intentos)";
+              if (r.status === "no_contesto" && r.intentos) label = `No contestó (${r.intentos})`;
+              const s = STATUS[r.status] || { c: C.muted, b: C.slateBg };
               return (
-                <div key={r.id} style={{ ...cardStyle, padding: "12px 16px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 600 }}>{r.cliente_nombre}</div>
-                      <div style={{ fontSize: 13, color: "#888", marginTop: 2 }}>{r.cliente_telefono} — {r.municipio} — {r.modelo}{r.antiguedad ? " — " + r.antiguedad : ""}</div>
-                      <div style={{ fontSize: 12, color: "#aaa", marginTop: 2 }}>Registrado por: {r.registrado_por}{r.resuelto_por ? " — Atendido por: " + r.resuelto_por : ""}</div>
+                <div key={r.id} style={{ ...S.card, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700 }}>{r.cliente_nombre}</div>
+                      <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{fmtTel(r.cliente_telefono)} · {r.municipio} · {r.modelo}{r.antiguedad ? ` · ${r.antiguedad}` : ""}</div>
+                      <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{r.registrado_por}{r.resuelto_por ? ` · atendido por ${r.resuelto_por}` : ""}</div>
                       {role === "admin" && (
-                        <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
-                          <button onClick={() => startEdit(r)} style={{ padding: "4px 12px", borderRadius: 8, border: "1px solid #534AB7", background: "#EEEDFE", color: "#534AB7", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Editar</button>
-                          <button onClick={() => deleteLlamada(r.id)} style={{ padding: "4px 12px", borderRadius: 8, border: "1px solid #E24B4A", background: "#FCEBEB", color: "#A32D2D", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Borrar llamada</button>
-                          <button onClick={() => deleteCliente(r.cliente_id, r.cliente_nombre)} style={{ padding: "4px 12px", borderRadius: 8, border: "1px solid #A32D2D", background: "#A32D2D", color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Borrar cliente</button>
+                        <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <button onClick={() => startEdit(r)} style={S.small}>Editar</button>
+                          <button onClick={() => deleteLlamada(r.id)} style={{ ...S.small, color: C.red }}>Borrar llamada</button>
+                          <button onClick={() => deleteCliente(r.cliente_id, r.cliente_nombre)} style={{ ...S.small, color: C.red }}>Borrar cliente</button>
                         </div>
                       )}
                       {editId === r.id && (
-                        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10, padding: "14px", borderRadius: 12, background: "#f9f9f9" }}>
-                          <div><label style={labelStyle}>Nombre</label><input style={inputStyle} value={editForm.nombre} onChange={e => setEditForm({...editForm, nombre: e.target.value})} /></div>
-                          <div><label style={labelStyle}>Teléfono</label><input style={inputStyle} value={editForm.telefono} onChange={e => setEditForm({...editForm, telefono: e.target.value})} /></div>
-                          <SearchSelect label="Pueblo" value={editForm.municipio_id} onChange={v => setEditForm({...editForm, municipio_id: v})} groups={munGroups} placeholder="Buscar pueblo..." />
-                          <SearchSelect label="Modelo" value={editForm.modelo_id} onChange={v => setEditForm({...editForm, modelo_id: v})} groups={modelGroups} placeholder="Buscar modelo..." />
-                          <div>
-                            <label style={labelStyle}>Tiempo con la unidad</label>
-                            <select style={{ ...inputStyle, appearance: "auto", cursor: "pointer" }} value={editForm.antiguedad_id} onChange={e => setEditForm({...editForm, antiguedad_id: e.target.value})}>
-                              <option value="">-- Seleccionar --</option>
-                              {antiguedadList.map(a => <option key={a.id} value={a.id}>{a.rango}</option>)}
-                            </select>
-                          </div>
-                          <div><label style={labelStyle}>Problema</label><input style={inputStyle} value={editForm.problema} onChange={e => setEditForm({...editForm, problema: e.target.value})} /></div>
+                        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10, padding: 14, borderRadius: 12, background: C.slateBg }}>
+                          <div><label style={S.label}>Nombre</label><input style={S.input} value={editForm.nombre} onChange={e => setEditForm({ ...editForm, nombre: e.target.value })} /></div>
+                          <div><label style={S.label}>Teléfono</label><input style={S.input} value={editForm.telefono} onChange={e => setEditForm({ ...editForm, telefono: e.target.value })} /></div>
+                          <SearchSelect label="Pueblo" value={editForm.municipio_id} onChange={v => setEditForm({ ...editForm, municipio_id: v })} groups={munGroups} placeholder="Buscar pueblo" />
+                          <SearchSelect label="Modelo" value={editForm.modelo_id} onChange={v => setEditForm({ ...editForm, modelo_id: v })} groups={modelGroups} placeholder="Buscar modelo" />
+                          <div><label style={S.label}>Tiempo con la unidad</label>
+                            <select style={{ ...S.input, appearance: "auto" }} value={editForm.antiguedad_id} onChange={e => setEditForm({ ...editForm, antiguedad_id: e.target.value })}>
+                              <option value="">Seleccionar</option>{antiguedadList.map(a => <option key={a.id} value={a.id}>{a.rango}</option>)}
+                            </select></div>
+                          <div><label style={S.label}>Problema</label><input style={S.input} value={editForm.problema} onChange={e => setEditForm({ ...editForm, problema: e.target.value })} /></div>
                           <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={() => saveEdit(r.id)} style={bigBtn("#0F6E56")}>GUARDAR</button>
-                            <button onClick={() => { setEditId(null); setEditForm({}); }} style={{ ...bigBtn("#f0f0f0"), color: "#888" }}>CANCELAR</button>
+                            <button onClick={() => saveEdit(r.id)} style={S.btn("primary")}>Guardar</button>
+                            <button onClick={() => { setEditId(null); setEditForm({}); }} style={S.btn("ghost")}>Cancelar</button>
                           </div>
                         </div>
                       )}
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 11, fontWeight: 500, background: s.b, color: s.c }}>{label}</span>
-                      <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>{fmtDate(r.created_at)}</div>
+                      <span style={S.pill(s.b, s.c)}>{label}</span>
+                      <div style={{ fontSize: 11, color: C.faint, marginTop: 6 }}>{fmtDate(r.created_at)}</div>
                     </div>
                   </div>
                 </div>
@@ -706,49 +912,61 @@ export default function App() {
         </div>
       )}
 
+      {/* ============ DASHBOARD ============ */}
       {tab === "dashboard" && (
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Dashboard</div>
-          <TimeFilter value={dashFilter} onChange={setDashFilter} dateRange={dashDateRange} onDateRange={setDashDateRange} />
+          <div style={S.h2}>Dashboard</div>
+          <TimeFilter value={filters.dash} onChange={v => setF("dash", v)} dateRange={ranges.dash} onDateRange={v => setR("dash", v)} />
           {(() => {
-            const filtered = filterByTime(records, dashFilter, dashDateRange);
-            const total = filtered.length;
-            const byStatus = {};
-            const byPueblo = {};
-            filtered.forEach(r => { byStatus[r.status] = (byStatus[r.status] || 0) + 1; byPueblo[r.municipio] = (byPueblo[r.municipio] || 0) + 1; });
-            const pueblos = Object.entries(byPueblo).sort((a,b) => b[1] - a[1]);
+            const filtered = filterByTime(records, filters.dash, ranges.dash);
+            const by = {}, byP = {};
+            filtered.forEach(r => { by[r.status] = (by[r.status] || 0) + 1; byP[r.municipio] = (byP[r.municipio] || 0) + 1; });
+            const pueblos = Object.entries(byP).sort((a, b) => b[1] - a[1]);
             const maxP = pueblos[0] ? pueblos[0][1] : 1;
-            const cards = [
-              { label: "Total", value: total, bg: "#534AB7" },
-              { label: "Resueltas", value: byStatus["atendido_resuelto"] || 0, bg: "#0F6E56" },
-              { label: "Referido San Juan", value: filtered.filter(r => r.status === "dirigido" && r.centro_dirigido === "San Juan").length, bg: "#0F6E56" },
-              { label: "Referido San Germán", value: filtered.filter(r => r.status === "dirigido" && r.centro_dirigido === "San Germán").length, bg: "#185FA5" },
-              { label: "Citados Marey", value: byStatus["atendido_cita_marey"] || 0, bg: "#185FA5" },
-              { label: "Cita domicilio", value: (byStatus["cita_domicilio"]||0) + (byStatus["cita_confirmada"]||0), bg: "#854F0B" },
-              { label: "No contestaron", value: byStatus["no_contesto"] || 0, bg: "#A32D2D" },
-              { label: "Pendientes", value: byStatus["pendiente_willy"] || 0, bg: "#854F0B" },
-            ];
+            const m = metricasPerd;
             return (
               <>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 30 }}>
-                  {cards.map(c => (
-                    <div key={c.label} style={{ padding: "18px 10px", borderRadius: 14, background: c.bg, textAlign: "center" }}>
-                      <div style={{ fontSize: 28, fontWeight: 700, color: "#fff" }}>{c.value}</div>
-                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 4, fontWeight: 500 }}>{c.label}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 20 }}>
+                  <Stat label="Total" value={filtered.length} />
+                  <Stat label="Resueltas" value={by.atendido_resuelto || 0} tone="green" />
+                  <Stat label="Pendientes" value={by.pendiente_willy || 0} tone="amber" />
+                  <Stat label="San Juan" value={filtered.filter(r => r.status === "dirigido" && r.centro_dirigido === "San Juan").length} tone="green" />
+                  <Stat label="San Germán" value={filtered.filter(r => r.status === "dirigido" && r.centro_dirigido === "San Germán").length} tone="blue" />
+                  <Stat label="Citados Marey" value={by.atendido_cita_marey || 0} tone="violet" />
+                  <Stat label="Cita domicilio" value={(by.cita_domicilio || 0) + (by.cita_confirmada || 0)} tone="amber" />
+                  <Stat label="No contestaron" value={by.no_contesto || 0} tone="red" />
+                </div>
+
+                <div style={S.card}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>Llamadas perdidas</div>
+                    <div style={S.sub}>{m ? `${m.pct_devueltas}% devueltas` : ""}</div>
+                  </div>
+                  {!m ? <div style={S.sub}>Cargando...</div> : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                      <Stat label="Entraron" value={m.total} tone="slate" />
+                      <Stat label="Perdidas" value={m.perdidas} tone="slate" />
+                      <Stat label="Voicemail" value={m.voicemails} tone="slate" />
+                      <Stat label="Devueltas" value={m.devueltas} tone="green" sub={m.min_respuesta != null ? `${m.min_respuesta} min prom.` : ""} />
+                      <Stat label="No contestaron" value={m.no_contestaron} tone="red" />
+                      <Stat label="Abiertas" value={m.abiertas} tone={m.abiertas > 0 ? "amber" : "slate"} />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ ...S.card }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Por pueblo</div>
+                  {pueblos.map(([pueblo, count]) => (
+                    <div key={pueblo} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                      <div style={{ width: 96, fontSize: 13, color: C.muted, textAlign: "right", flexShrink: 0 }}>{pueblo}</div>
+                      <div style={{ flex: 1, height: 22, background: C.slateBg, borderRadius: 6, overflow: "hidden" }}>
+                        <div style={{ width: (count / maxP * 100) + "%", height: "100%", background: C.navy, borderRadius: 6, minWidth: 26, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{count}</span>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 14 }}>Por pueblo</div>
-                {pueblos.map(([pueblo, count]) => (
-                  <div key={pueblo} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <div style={{ width: 100, fontSize: 13, color: "#666", textAlign: "right", flexShrink: 0, fontWeight: 500 }}>{pueblo}</div>
-                    <div style={{ flex: 1, height: 26, background: "#f0f0f0", borderRadius: 8, overflow: "hidden" }}>
-                      <div style={{ width: (count/maxP*100)+"%", height: "100%", background: "#534AB7", borderRadius: 8, minWidth: 26, display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{count}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
               </>
             );
           })()}
