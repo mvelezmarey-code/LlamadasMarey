@@ -1117,17 +1117,34 @@ export default function App() {
                     <div style={S.sub}>{m ? `${m.pct_devueltas}% devueltas` : ""}</div>
                   </div>
                   {!m ? <div style={S.sub}>Cargando...</div> : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-                      <Stat label="Entraron" value={m.total} tone="slate" />
-                      <Stat label="Perdidas" value={m.perdidas} tone="slate" />
-                      <Stat label="Voicemail" value={m.voicemails} tone="slate" />
-                      <Stat label="Devueltas" value={m.devueltas} tone="green" sub={m.min_respuesta != null ? `${m.min_respuesta} min prom.` : ""} />
-                      <Stat label="Atendidas" value={m.atendidas} tone="green" />
-                      <Stat label="Pendiente técnico" value={m.pendiente_tecnico} tone="amber" />
-                      <Stat label="Ya estaba atendido" value={m.ya_atendido} tone="slate" />
-                      <Stat label="No contestaron" value={m.no_contestaron} tone="red" />
-                      <Stat label="Abiertas" value={m.abiertas} tone={m.abiertas > 0 ? "amber" : "slate"} />
-                    </div>
+                    <>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+                        <Stat label="Entraron" value={m.total} tone="slate" />
+                        <Stat label="Perdidas" value={m.perdidas} tone="slate" />
+                        <Stat label="Voicemail" value={m.voicemails} tone="slate" />
+                        <Stat label="Devueltas" value={m.devueltas} tone="green" sub={m.min_respuesta != null ? `${m.min_respuesta} min prom.` : ""} />
+                        <Stat label="Atendidas" value={m.atendidas} tone="green" />
+                        <Stat label="Pendiente técnico" value={m.pendiente_tecnico} tone="amber" />
+                        <Stat label="Ya estaba atendido" value={m.ya_atendido} tone="slate" />
+                        <Stat label="No contestaron" value={m.no_contestaron} tone="red" />
+                        <Stat label="Abiertas" value={m.abiertas} tone={m.abiertas > 0 ? "amber" : "slate"} />
+                      </div>
+                      {(() => {
+                        const partes = [];
+                        partes.push(`Entraron ${m.total === 1 ? "1 llamada perdida" : m.total + " llamadas perdidas"}${m.voicemails ? ` (${m.voicemails} con voicemail)` : ""}.`);
+                        if (m.devueltas) {
+                          const sub = [];
+                          if (m.atendidas) sub.push(`${m.atendidas} se resolvieron o se enviaron a un centro`);
+                          if (m.pendiente_tecnico) sub.push(`${m.pendiente_tecnico} pasaron a técnicos`);
+                          if (m.ya_atendido) sub.push(`${m.ya_atendido} ya no necesitaban ayuda`);
+                          partes.push(`Se les devolvió la llamada a ${m.devueltas} (${m.pct_devueltas}%)${sub.length ? ": " + sub.join(", ") : ""}.`);
+                        }
+                        if (m.no_contestaron) partes.push(`A ${m.no_contestaron} se les llamó y no contestaron.`);
+                        if (m.spam) partes.push(`${m.spam} no aplicaban (número malo, repetida o basura).`);
+                        if (m.abiertas) partes.push(`${m.abiertas === 1 ? "Queda 1 llamada" : "Quedan " + m.abiertas + " llamadas"} sin devolver.`);
+                        return <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.line}`, fontSize: 13.5, color: C.text, lineHeight: 1.6 }}>{partes.join(" ")}</div>;
+                      })()}
+                    </>
                   )}
                 </div>
 
