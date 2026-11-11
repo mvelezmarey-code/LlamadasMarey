@@ -48,6 +48,7 @@ const S = {
     if (kind === "primary") return { ...base, background: C.navy, color: "#fff" };
     if (kind === "ghost") return { ...base, background: "#fff", color: C.text, border: `1px solid ${C.line}` };
     if (kind === "danger") return { ...base, background: C.redBg, color: C.red };
+    if (kind === "red") return { ...base, background: C.red, color: "#fff" };
     if (kind === "green") return { ...base, background: C.green, color: "#fff" };
     if (kind === "amber") return { ...base, background: C.amberBg, color: C.amber };
     if (kind === "blue") return { ...base, background: C.blue, color: "#fff" };
@@ -132,6 +133,11 @@ function GlobalCss() {
       .nav-n { min-width: 22px; height: 22px; border-radius: 11px; background: rgba(255,255,255,.18); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
       .nav-n.red { background: #EF4444; }
       .acts3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .tipw { position: relative; }
+      .tipw .tip { position: absolute; bottom: calc(100% + 8px); left: 0; min-width: 210px; max-width: 280px; background: ${C.ink}; color: #fff; font-size: 12px; font-weight: 500; line-height: 1.4; text-align: left; padding: 10px 12px; border-radius: 10px; box-shadow: 0 12px 30px -12px rgba(0,0,0,.5); opacity: 0; visibility: hidden; transform: translateY(4px); transition: opacity .15s, transform .15s; z-index: 30; pointer-events: none; }
+      .tipw .tip b { color: #fff; }
+      .tipw .tip::after { content: ""; position: absolute; top: 100%; left: 22px; border: 6px solid transparent; border-top-color: ${C.ink}; }
+      .tipw:hover .tip, .tipw:focus-within .tip { opacity: 1; visibility: visible; transform: translateY(0); }
       @media (max-width: 899px) {
         .shell { grid-template-columns: 1fr; }
         .side { display: none; }
@@ -501,8 +507,10 @@ export default function App() {
     }).select("id").single();
 
     if (devolviendo) {
+      // San Juan / San Germán / Se resolvió = atendida. Referido a técnicos = pendiente del técnico.
+      const resPerdida = statusNombre === "pendiente_willy" ? "pendiente_tecnico" : "atendida";
       await supabase.from("llamadas_perdidas").update({
-        estado: "cerrada", resultado: "contestada", cerrada_por: user, cerrada_at: new Date().toISOString(), llamada_id: nueva?.id || null
+        estado: "cerrada", resultado: resPerdida, cerrada_por: user, cerrada_at: new Date().toISOString(), llamada_id: nueva?.id || null
       }).eq("id", devolviendo.id);
       setDevolviendo(null);
       fetchPerdidas();
@@ -532,18 +540,32 @@ export default function App() {
     setTimeout(() => searchPhone(fmtTel(p.telefono)), 50);
   };
   const limpiarAtendiendo = () => { setDevolviendo(null); setForm(FORM0); setClienteFound(null); setClienteHistory([]); setTab("perdidas"); };
-  // No contesto: suma un intento y la suelta para que vuelva a la lista; al tercero se cierra
+  // No contestó: nunca cierra sola. 1er intento -> dormida 30 min. 2do -> vuelve a la lista para decidir.
   const noContestoAtendiendo = async () => {
     const p = devolviendo; if (!p) return;
     const n = (p.intentos || 0) + 1;
-    const upd = { intentos: n, ultimo_intento: new Date().toISOString(), estado: "abierta", tomada_por: null, tomada_at: null };
-    if (n >= 3) Object.assign(upd, { estado: "cerrada", resultado: "no_contesta", cerrada_por: user, cerrada_at: new Date().toISOString(), tomada_por: user });
-    await supabase.from("llamadas_perdidas").update(upd).eq("id", p.id);
+    await supabase.from("llamadas_perdidas").update({
+      intentos: n, ultimo_intento: new Date().toISOString(), estado: "abierta", tomada_por: null, tomada_at: null,
+      dormida_hasta: n >= 2 ? null : new Date(Date.now() + 30 * 60000).toISOString()
+    }).eq("id", p.id);
     limpiarAtendiendo(); fetchPerdidas();
   };
-  const spamAtendiendo = async () => {
+  // Decisión tras el 2do intento: cerrar como "Devuelta, no contestó"
+  const cerrarNoContestoAtendiendo = async () => {
     const p = devolviendo; if (!p) return;
-    await supabase.from("llamadas_perdidas").update({ estado: "cerrada", resultado: "spam", cerrada_por: user, cerrada_at: new Date().toISOString() }).eq("id", p.id);
+    await supabase.from("llamadas_perdidas").update({ estado: "cerrada", resultado: "no_contesta", cerrada_por: user, cerrada_at: new Date().toISOString() }).eq("id", p.id);
+    limpiarAtendiendo(); fetchPerdidas();
+  };
+  // Ya estaba atendido: el cliente ya había sido atendido o lo resolvió por su cuenta. Sin gestión nueva.
+  const yaAtendidoAtendiendo = async () => {
+    const p = devolviendo; if (!p) return;
+    await supabase.from("llamadas_perdidas").update({ estado: "cerrada", resultado: "ya_atendido", cerrada_por: user, cerrada_at: new Date().toISOString() }).eq("id", p.id);
+    limpiarAtendiendo(); fetchPerdidas();
+  };
+  // No aplica: número equivocado, llamada repetida o basura.
+  const noAplicaAtendiendo = async () => {
+    const p = devolviendo; if (!p) return;
+    await supabase.from("llamadas_perdidas").update({ estado: "cerrada", resultado: "no_aplica", cerrada_por: user, cerrada_at: new Date().toISOString() }).eq("id", p.id);
     limpiarAtendiendo(); fetchPerdidas();
   };
   // Cancelar: la suelta y vuelve a la lista de los dos
@@ -608,7 +630,11 @@ export default function App() {
   const pendingCount = records.filter(r => r.status === "pendiente_willy").length;
   const citasCount = records.filter(r => r.status === "cita_domicilio").length;
   // Lo que ve cada uno: las abiertas + las que el mismo esta atendiendo. Las que tomo otro desaparecen de su lista.
-  const perdidasVisibles = perdidas.filter(p => p.estado === "abierta" || p.tomada_por === user);
+  // Visibles: abiertas o la que yo atiendo; se ocultan las dormidas (reintento programado) hasta su hora
+  const ahoraMs = Date.now();
+  const perdidasVisibles = perdidas.filter(p =>
+    (p.estado === "abierta" || p.tomada_por === user) &&
+    (p.tomada_por === user || !p.dormida_hasta || new Date(p.dormida_hasta).getTime() <= ahoraMs));
   const perdidasCount = perdidasVisibles.length;
   const myResolved = records.filter(r => r.resuelto_por === user).length;
 
@@ -699,8 +725,11 @@ export default function App() {
                   <div style={{ fontSize: 13, color: C.amber }}>{fmtTel(devolviendo.telefono)}{devolviendo.nombre_cid ? ` · ${devolviendo.nombre_cid}` : ""} · llamó {devolviendo.veces} {devolviendo.veces === 1 ? "vez" : "veces"}{devolviendo.intentos ? ` · ${devolviendo.intentos} ${devolviendo.intentos === 1 ? "intento" : "intentos"} sin contestar` : ""}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <button onClick={() => noContestoAtendiendo()} style={{ ...S.btn("amber"), padding: "9px 14px", fontSize: 13, width: "auto" }}>{(devolviendo.intentos || 0) >= 2 ? "No contestó · cerrar" : "No contestó"}</button>
-                  <button onClick={() => spamAtendiendo()} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto" }}>Spam</button>
+                  {(devolviendo.intentos || 0) >= 2
+                    ? <span className="tipw"><button onClick={() => cerrarNoContestoAtendiendo()} style={{ ...S.btn("red"), padding: "9px 14px", fontSize: 13, width: "auto" }}>Cerrar · no contestó</button><span className="tip">Se intentó <b>2 veces</b> y el cliente no contestó. Se cierra como <b>Devuelta, no contestó</b>.</span></span>
+                    : <span className="tipw"><button onClick={() => noContestoAtendiendo()} style={{ ...S.btn("amber"), padding: "9px 14px", fontSize: 13, width: "auto" }}>No contestó</button><span className="tip">El cliente no cogió. <b>1er intento:</b> vuelve dormida 30 min. <b>2do intento:</b> queda para decidir.</span></span>}
+                  <span className="tipw"><button onClick={() => yaAtendidoAtendiendo()} style={{ ...S.btn("green"), padding: "9px 14px", fontSize: 13, width: "auto" }}>Ya estaba atendido</button><span className="tip">El cliente <b>ya había sido atendido</b> o lo resolvió por su cuenta. Se cierra como contactado, sin gestión nueva.</span></span>
+                  <span className="tipw"><button onClick={() => noAplicaAtendiendo()} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto" }}>No aplica</button><span className="tip">Número equivocado, llamada repetida o basura. Se descarta.</span></span>
                   <button onClick={() => cancelarAtendiendo()} style={{ background: "none", border: "none", color: C.amber, fontSize: 13, cursor: "pointer", fontFamily: FONT, padding: "0 4px", textDecoration: "underline" }}>Cancelar</button>
                 </div>
               </div>
@@ -754,14 +783,17 @@ export default function App() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {[
-                    ["Se resolvió", "por teléfono", "primary", () => saveCallWith("atendido_resuelto", null)],
-                    ["Enviado a San Juan", "", "green", () => saveCallWith("dirigido", "San Juan")],
-                    ["Enviado a San Germán", "", "blue", () => saveCallWith("dirigido", "San Germán")],
-                    ["Referido a técnicos", "entra al Queue", "amber", () => saveCallWith("pendiente_willy", null)],
-                  ].map(([t, sub, kind, fn]) => (
-                    <button key={t} onClick={fn} disabled={!canSave} style={{ ...S.btn(canSave ? kind : "disabled"), height: 56, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>{t}</span>{sub && <span style={{ fontSize: 11, fontWeight: 600, opacity: .8 }}>{sub}</span>}
-                    </button>
+                    ["Se resolvió", "por teléfono", "primary", () => saveCallWith("atendido_resuelto", null), "El problema se resolvió en la misma llamada." + (devolviendo ? " La perdida queda como Devuelta y atendida." : "")],
+                    ["Enviado a San Juan", "", "green", () => saveCallWith("dirigido", "San Juan"), "El cliente va al centro de servicio de San Juan." + (devolviendo ? " La perdida queda como Devuelta y atendida." : "")],
+                    ["Enviado a San Germán", "", "blue", () => saveCallWith("dirigido", "San Germán"), "El cliente va al centro de servicio de San Germán." + (devolviendo ? " La perdida queda como Devuelta y atendida." : "")],
+                    ["Referido a técnicos", "entra al Queue", "amber", () => saveCallWith("pendiente_willy", null), "El caso entra al Queue de los técnicos para que lo llamen." + (devolviendo ? " La perdida queda como Devuelta · pendiente técnico." : "")],
+                  ].map(([t, sub, kind, fn, tip]) => (
+                    <span key={t} className="tipw" style={{ display: "block" }}>
+                      <button onClick={fn} disabled={!canSave} style={{ ...S.btn(canSave ? kind : "disabled"), height: 56, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>{t}</span>{sub && <span style={{ fontSize: 11, fontWeight: 600, opacity: .8 }}>{sub}</span>}
+                      </button>
+                      <span className="tip">{tip}</span>
+                    </span>
                   ))}
                   <div style={{ fontSize: 12, color: C.faint, textAlign: "center", marginTop: 2 }}>{canSave ? "Toca una para guardar" : "Se activan cuando el formulario está completo"}</div>
                 </div>
@@ -782,7 +814,8 @@ export default function App() {
             {perdidasVisibles.length === 0 && <Empty titulo="Todo devuelto" texto="Cuando entre una llamada perdida o un voicemail aparece aquí y suena un aviso." />}
             {perdidasVisibles.map(p => {
               const mia = p.tomada_por === user;
-              const urgente = (Date.now() - new Date(p.primera_llamada).getTime()) > 15 * 60000 && p.estado === "abierta";
+              const decidir = (p.intentos || 0) >= 2 && p.estado !== "cerrada";
+              const urgente = decidir || ((Date.now() - new Date(p.primera_llamada).getTime()) > 15 * 60000 && p.estado === "abierta");
               return (
                 <div key={p.id} style={{ ...S.card, borderColor: urgente ? "#FCA5A5" : C.line }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
@@ -792,7 +825,9 @@ export default function App() {
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                         <span style={S.pill(p.tiene_voicemail ? C.violetBg : C.amberBg, p.tiene_voicemail ? C.violet : C.amber)}>{p.tiene_voicemail ? `Voicemail${p.voicemail_seg ? ` · ${p.voicemail_seg}s` : ""}` : "Perdida"}</span>
                         {p.veces > 1 && <span style={S.pill(C.redBg, C.red)}>Llamó {p.veces} veces</span>}
-                        {p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>{p.intentos} {p.intentos === 1 ? "intento" : "intentos"} sin contestar</span>}
+                        {decidir
+                          ? <span style={S.pill(C.redBg, C.red)}>{p.intentos} intentos · decidir</span>
+                          : (p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>{p.intentos} intento sin contestar</span>)}
                         {mia && <span style={S.pill(C.greenBg, C.green)}>La estás atendiendo</span>}
                         {p.cola && <span style={S.pill(C.slateBg, C.muted)}>{p.cola.replace("MRY-PR_", "")}</span>}
                       </div>
@@ -810,7 +845,7 @@ export default function App() {
                       </div>
                       {mia
                         ? <button onClick={() => (devolviendo && devolviendo.id === p.id) ? setTab("llamadas") : devolver(p)} style={{ ...S.btn("ghost"), padding: "11px 18px", fontSize: 14, width: "auto" }}>Continuar</button>
-                        : <button onClick={() => devolver(p)} style={{ ...S.btn("primary"), padding: "11px 18px", fontSize: 14, width: "auto" }}>Atender</button>}
+                        : <button onClick={() => devolver(p)} style={{ ...S.btn(decidir ? "red" : "primary"), padding: "11px 18px", fontSize: 14, width: "auto" }}>{decidir ? "Decidir" : (p.intentos ? "Reintentar" : "Atender")}</button>}
                     </div>
                   </div>
                 </div>
@@ -821,7 +856,7 @@ export default function App() {
               <div style={{ marginTop: 20 }}>
                 <div style={{ ...S.label, marginBottom: 10 }}>Devueltas · últimos 7 días</div>
                 {perdidasCerradas.map(p => {
-                  const res = { contestada: ["Devuelta", C.greenBg, C.green], no_contesta: ["No contestó", C.redBg, C.red], spam: ["Spam", C.slateBg, C.text], no_aplica: ["No aplica", C.slateBg, C.text] }[p.resultado] || [p.resultado, C.slateBg, C.text];
+                  const res = { atendida: ["Devuelta y atendida", C.greenBg, C.green], contestada: ["Devuelta y atendida", C.greenBg, C.green], pendiente_tecnico: ["Devuelta · pendiente técnico", C.amberBg, C.amber], ya_atendido: ["Ya estaba atendido", C.violetBg, C.violet], no_contesta: ["Devuelta, no contestó", C.redBg, C.red], spam: ["No aplica", C.slateBg, C.text], no_aplica: ["No aplica", C.slateBg, C.text] }[p.resultado] || [p.resultado, C.slateBg, C.text];
                   return (
                     <div key={p.id} style={{ ...S.card, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                       <div style={{ fontSize: 13 }}><b>{fmtTel(p.telefono)}</b> <span style={{ color: C.muted }}>· {p.cerrada_por || "—"}{p.minutos_respuesta != null ? ` · ${Math.round(p.minutos_respuesta)} min` : ""}{p.intentos ? ` · ${p.intentos} intentos` : ""} · {fmtDate(p.cerrada_at)}</span></div>
@@ -1053,6 +1088,9 @@ export default function App() {
                       <Stat label="Perdidas" value={m.perdidas} tone="slate" />
                       <Stat label="Voicemail" value={m.voicemails} tone="slate" />
                       <Stat label="Devueltas" value={m.devueltas} tone="green" sub={m.min_respuesta != null ? `${m.min_respuesta} min prom.` : ""} />
+                      <Stat label="Atendidas" value={m.atendidas} tone="green" />
+                      <Stat label="Pendiente técnico" value={m.pendiente_tecnico} tone="amber" />
+                      <Stat label="Ya estaba atendido" value={m.ya_atendido} tone="slate" />
                       <Stat label="No contestaron" value={m.no_contestaron} tone="red" />
                       <Stat label="Abiertas" value={m.abiertas} tone={m.abiertas > 0 ? "amber" : "slate"} />
                     </div>
@@ -1090,13 +1128,16 @@ function MetricasHoy({ perdidas, cerradas }) {
   const todas = [...hoyAb, ...hoyCe];
   const entraron = todas.length;
   const vm = todas.filter(p => p.tiene_voicemail).length;
-  const dev = hoyCe.filter(p => p.resultado === "contestada");
-  const prom = dev.length ? Math.round(dev.reduce((a, p) => a + (p.minutos_respuesta || 0), 0) / dev.length) : null;
+  const esAtendida = p => p.resultado === "atendida" || p.resultado === "contestada";
+  const esContactada = p => esAtendida(p) || p.resultado === "pendiente_tecnico" || p.resultado === "ya_atendido";
+  const dev = hoyCe.filter(esContactada);            // devueltas = se contactó al cliente
+  const conMin = hoyCe.filter(p => esAtendida(p) || p.resultado === "pendiente_tecnico");
+  const prom = conMin.length ? Math.round(conMin.reduce((a, p) => a + (p.minutos_respuesta || 0), 0) / conMin.length) : null;
   const noCont = hoyCe.filter(p => p.resultado === "no_contesta").length;
   const pct = entraron ? Math.round(dev.length / entraron * 100) : 0;
   // quien atendio hoy (devueltas por persona + su tiempo promedio)
   const porPersona = {};
-  hoyCe.forEach(p => { if (!p.cerrada_por) return; const q = porPersona[p.cerrada_por] || (porPersona[p.cerrada_por] = { n: 0, dev: 0, min: 0 }); q.n++; if (p.resultado === "contestada") { q.dev++; q.min += p.minutos_respuesta || 0; } });
+  hoyCe.forEach(p => { if (!p.cerrada_por) return; const q = porPersona[p.cerrada_por] || (porPersona[p.cerrada_por] = { n: 0, dev: 0, min: 0 }); q.n++; if (esContactada(p)) { q.dev++; if (p.minutos_respuesta != null) q.min += p.minutos_respuesta; } });
   const personas = Object.entries(porPersona).sort((a, b) => b[1].dev - a[1].dev);
   const Row = ({ l, v }) => <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: `1px solid ${C.slateBg}` }}><span style={{ color: C.text }}>{l}</span><b>{v}</b></div>;
   return (
@@ -1115,7 +1156,7 @@ function MetricasHoy({ perdidas, cerradas }) {
           {personas.map(([n, q]) => (
             <div key={n} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0" }}>
               <span>{n}</span>
-              <span style={{ color: C.muted }}><b style={{ color: C.text }}>{q.dev}</b> devuelta{q.dev !== 1 ? "s" : ""}{q.dev ? ` · ${Math.round(q.min / q.dev)} min` : ""}{q.n - q.dev ? ` · ${q.n - q.dev} sin contestar/spam` : ""}</span>
+              <span style={{ color: C.muted }}><b style={{ color: C.text }}>{q.dev}</b> devuelta{q.dev !== 1 ? "s" : ""}{q.dev ? ` · ${Math.round(q.min / q.dev)} min` : ""}{q.n - q.dev ? ` · ${q.n - q.dev} sin contestar/no aplica` : ""}</span>
             </div>
           ))}
         </div>
