@@ -107,6 +107,18 @@ function beep() {
   } catch { /* sin audio */ }
 }
 
+/* ---------- Encabezado de seccion de la lista de perdidas ---------- */
+const SecHead = ({ dot, t, n, d }) => (
+  <div style={{ padding: "13px 16px 12px", background: C.bg, border: `1px solid ${C.line}`, borderRadius: 12, marginBottom: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+      <span style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{t}</span>
+      {n != null && <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: C.muted, background: C.card, border: `1px solid ${C.line}`, borderRadius: 999, padding: "1px 9px" }}>{n}</span>}
+    </div>
+    {d && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.45, paddingLeft: 17 }}>{d}</div>}
+  </div>
+);
+
 /* ---------- CSS global minimo (fuente, animaciones) ---------- */
 function GlobalCss() {
   return (
@@ -632,10 +644,57 @@ export default function App() {
   // Lo que ve cada uno: las abiertas + las que el mismo esta atendiendo. Las que tomo otro desaparecen de su lista.
   // Visibles: abiertas o la que yo atiendo; se ocultan las dormidas (reintento programado) hasta su hora
   const ahoraMs = Date.now();
-  const perdidasVisibles = perdidas.filter(p =>
-    (p.estado === "abierta" || p.tomada_por === user) &&
-    (p.tomada_por === user || !p.dormida_hasta || new Date(p.dormida_hasta).getTime() <= ahoraMs));
+  const noCerradas = perdidas.filter(p => p.estado === "abierta" || p.tomada_por === user);
+  // Nuevas: nunca se han llamado. Reintento: ya se les llamo y no contestaron (dormidas o listas para decidir).
+  const perdidasNuevas = noCerradas.filter(p => (p.intentos || 0) === 0);
+  const perdidasReintento = noCerradas
+    .filter(p => (p.intentos || 0) >= 1)
+    .sort((a, b) => ((b.intentos || 0) >= 2 ? 1 : 0) - ((a.intentos || 0) >= 2 ? 1 : 0));
+  const perdidasVisibles = noCerradas;
   const perdidasCount = perdidasVisibles.length;
+
+  // Una fila de la lista de perdidas (se reusa en Nuevas y en Reintento)
+  const filaPerdida = (p) => {
+    const mia = p.tomada_por === user;
+    const decidir = (p.intentos || 0) >= 2 && p.estado !== "cerrada";
+    const dormida = p.dormida_hasta && new Date(p.dormida_hasta).getTime() > ahoraMs;
+    const minsFalta = dormida ? Math.max(1, Math.ceil((new Date(p.dormida_hasta).getTime() - ahoraMs) / 60000)) : 0;
+    const urgente = decidir || (!dormida && (Date.now() - new Date(p.primera_llamada).getTime()) > 15 * 60000 && p.estado === "abierta");
+    return (
+      <div key={p.id} style={{ ...S.card, borderColor: urgente ? "#FCA5A5" : C.line }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 19, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtTel(p.telefono)}</div>
+            {p.nombre_cid && <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{p.nombre_cid}</div>}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+              <span style={S.pill(p.tiene_voicemail ? C.violetBg : C.amberBg, p.tiene_voicemail ? C.violet : C.amber)}>{p.tiene_voicemail ? `Voicemail${p.voicemail_seg ? ` · ${p.voicemail_seg}s` : ""}` : "Perdida"}</span>
+              {p.veces > 1 && <span style={S.pill(C.redBg, C.red)}>Llamó {p.veces} veces</span>}
+              {decidir && <span style={S.pill(C.redBg, C.red)}>{p.intentos} intentos · decidir</span>}
+              {!decidir && dormida && <span style={S.pill(C.amberBg, C.amber)}>{p.intentos} {p.intentos === 1 ? "intento" : "intentos"} · vuelve en {minsFalta} min</span>}
+              {!decidir && !dormida && p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>{p.intentos} {p.intentos === 1 ? "intento" : "intentos"} sin contestar</span>}
+              {mia && <span style={S.pill(C.greenBg, C.green)}>La estás atendiendo</span>}
+              {p.cola && <span style={S.pill(C.slateBg, C.muted)}>{p.cola.replace("MRY-PR_", "")}</span>}
+            </div>
+            {p.voicemail_url && (
+              <div style={{ marginTop: 10, maxWidth: 380 }}>
+                {audioUrls[p.id] ? <audio controls src={audioUrls[p.id]} style={{ width: "100%", height: 36 }} /> :
+                  <button onClick={() => urlAudio(p)} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto" }}>Escuchar voicemail</button>}
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: urgente ? C.red : C.text }}>{hace(p.ultima_llamada)}</div>
+              <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{fmtDate(p.ultima_llamada)}</div>
+            </div>
+            {mia
+              ? <button onClick={() => (devolviendo && devolviendo.id === p.id) ? setTab("llamadas") : devolver(p)} style={{ ...S.btn("ghost"), padding: "11px 18px", fontSize: 14, width: "auto" }}>Continuar</button>
+              : <button onClick={() => devolver(p)} style={{ ...S.btn(decidir ? "red" : "primary"), padding: "11px 18px", fontSize: 14, width: "auto" }}>{decidir ? "Decidir" : (p.intentos ? "Reintentar" : "Atender")}</button>}
+          </div>
+        </div>
+      </div>
+    );
+  };
   const myResolved = records.filter(r => r.resuelto_por === user).length;
 
   let tabs = [];
@@ -812,49 +871,24 @@ export default function App() {
               <button onClick={sincronizar} disabled={sync.busy} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto", opacity: sync.busy ? 0.6 : 1 }}>{sync.busy ? "Revisando..." : "Actualizar"}</button>
             </div>
             {perdidasVisibles.length === 0 && <Empty titulo="Todo devuelto" texto="Cuando entre una llamada perdida o un voicemail aparece aquí y suena un aviso." />}
-            {perdidasVisibles.map(p => {
-              const mia = p.tomada_por === user;
-              const decidir = (p.intentos || 0) >= 2 && p.estado !== "cerrada";
-              const urgente = decidir || ((Date.now() - new Date(p.primera_llamada).getTime()) > 15 * 60000 && p.estado === "abierta");
-              return (
-                <div key={p.id} style={{ ...S.card, borderColor: urgente ? "#FCA5A5" : C.line }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 19, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{fmtTel(p.telefono)}</div>
-                      {p.nombre_cid && <div style={{ fontSize: 13, color: C.muted, marginTop: 2 }}>{p.nombre_cid}</div>}
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                        <span style={S.pill(p.tiene_voicemail ? C.violetBg : C.amberBg, p.tiene_voicemail ? C.violet : C.amber)}>{p.tiene_voicemail ? `Voicemail${p.voicemail_seg ? ` · ${p.voicemail_seg}s` : ""}` : "Perdida"}</span>
-                        {p.veces > 1 && <span style={S.pill(C.redBg, C.red)}>Llamó {p.veces} veces</span>}
-                        {decidir
-                          ? <span style={S.pill(C.redBg, C.red)}>{p.intentos} intentos · decidir</span>
-                          : (p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>{p.intentos} intento sin contestar</span>)}
-                        {mia && <span style={S.pill(C.greenBg, C.green)}>La estás atendiendo</span>}
-                        {p.cola && <span style={S.pill(C.slateBg, C.muted)}>{p.cola.replace("MRY-PR_", "")}</span>}
-                      </div>
-                      {p.voicemail_url && (
-                        <div style={{ marginTop: 10, maxWidth: 380 }}>
-                          {audioUrls[p.id] ? <audio controls src={audioUrls[p.id]} style={{ width: "100%", height: 36 }} /> :
-                            <button onClick={() => urlAudio(p)} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto" }}>Escuchar voicemail</button>}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: urgente ? C.red : C.text }}>{hace(p.ultima_llamada)}</div>
-                        <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{fmtDate(p.ultima_llamada)}</div>
-                      </div>
-                      {mia
-                        ? <button onClick={() => (devolviendo && devolviendo.id === p.id) ? setTab("llamadas") : devolver(p)} style={{ ...S.btn("ghost"), padding: "11px 18px", fontSize: 14, width: "auto" }}>Continuar</button>
-                        : <button onClick={() => devolver(p)} style={{ ...S.btn(decidir ? "red" : "primary"), padding: "11px 18px", fontSize: 14, width: "auto" }}>{decidir ? "Decidir" : (p.intentos ? "Reintentar" : "Atender")}</button>}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+
+            {perdidasNuevas.length > 0 && (
+              <>
+                <SecHead dot={C.amber} t="Nuevas" n={perdidasNuevas.length} d="Perdidas y voicemails que todavía nadie ha devuelto." />
+                {perdidasNuevas.map(filaPerdida)}
+              </>
+            )}
+
+            {perdidasReintento.length > 0 && (
+              <div style={{ marginTop: perdidasNuevas.length ? 20 : 0 }}>
+                <SecHead dot={C.red} t="Se llamó · el cliente no contestó" n={perdidasReintento.length} d="Ya se les devolvió la llamada y no contestaron · esperan el 2do intento o una decisión." />
+                {perdidasReintento.map(filaPerdida)}
+              </div>
+            )}
 
             {perdidasCerradas.length > 0 && (
               <div style={{ marginTop: 20 }}>
-                <div style={{ ...S.label, marginBottom: 10 }}>Devueltas · últimos 7 días</div>
+                <SecHead dot={C.green} t="Atendidas · últimos 7 días" n={perdidasCerradas.length} d="Devueltas y cerradas." />
                 {perdidasCerradas.map(p => {
                   const res = { atendida: ["Devuelta y atendida", C.greenBg, C.green], contestada: ["Devuelta y atendida", C.greenBg, C.green], pendiente_tecnico: ["Devuelta · pendiente técnico", C.amberBg, C.amber], ya_atendido: ["Ya estaba atendido", C.violetBg, C.violet], no_contesta: ["Devuelta, no contestó", C.redBg, C.red], spam: ["No aplica", C.slateBg, C.text], no_aplica: ["No aplica", C.slateBg, C.text] }[p.resultado] || [p.resultado, C.slateBg, C.text];
                   return (
