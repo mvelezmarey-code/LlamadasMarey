@@ -1242,9 +1242,9 @@ function MetricasHoy({ perdidas, cerradas }) {
       {pct != null && <div style={{ fontSize: 11, color: C.green, marginTop: 2, opacity: .85 }}>{pct}</div>}
     </div>
   );
-  const Bar = ({ t, pct, color }) => (
+  const Bar = ({ t, frac, pct, color }) => (
     <div style={{ marginTop: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 5 }}><span>{t}</span><span>{pct}%</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 5 }}><span>{t}</span><span><b style={{ color: C.text }}>{frac}</b> · {pct}%</span></div>
       <div style={{ height: 9, borderRadius: 5, background: C.slateBg, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", borderRadius: 5, background: color }} /></div>
     </div>
   );
@@ -1258,8 +1258,8 @@ function MetricasHoy({ perdidas, cerradas }) {
       <div style={{ ...S.label, marginBottom: 6 }}>Hoy</div>
 
       <div style={{ display: "flex", gap: 10, margin: "2px 0 12px" }}>
-        <Cell num={devueltas} cap="Devueltas" pct={`${pctDev}% de las reales`} />
-        <Cell num={contactadas} cap="Contactadas" pct={`${pctCont}% cogió`} />
+        <Cell num={devueltas} cap="Devueltas" pct={`${devueltas}/${reales} · ${pctDev}%`} />
+        <Cell num={contactadas} cap="Contactadas" pct={`${contactadas}/${devueltas} · ${pctCont}%`} />
       </div>
 
       <Row l="Entraron" v={entraron} />
@@ -1270,8 +1270,8 @@ function MetricasHoy({ perdidas, cerradas }) {
       <Row l="No contestó" sub="el cliente no cogió" v={noCont} color={C.amber} />
       <Row l="Tiempo de respuesta" v={prom != null ? `${prom} min` : "—"} />
 
-      <Bar t="Devueltas" pct={pctDev} color={C.green} />
-      <Bar t="Contactó al cliente" pct={pctCont} color={C.navy} />
+      <Bar t="Devueltas" frac={`${devueltas}/${reales}`} pct={pctDev} color={C.green} />
+      <Bar t="Contactó al cliente" frac={`${contactadas}/${devueltas}`} pct={pctCont} color={C.navy} />
 
       {personas.length > 0 && (
         <div style={{ marginTop: 16 }}>
