@@ -501,32 +501,48 @@ export default function App() {
   /* ---------- guardar llamada (y cerrar la perdida si aplica) ---------- */
   const saveCallWith = async (statusNombre, centroDirigido) => {
     const statusId = getStatusId(statusNombre);
-    if (!statusId) return;
+    if (!statusId) { alert("No se encontró el status '" + statusNombre + "'. Recarga la página e intenta de nuevo."); return; }
+
+    // 1) Cliente: usa el que ya existe (por id o por telefono) o lo crea.
+    //    Si busca por telefono evita chocar con el UNIQUE y evita duplicados.
     let clienteId;
     if (clienteFound) {
       clienteId = clienteFound.id;
-      if (form.nombre !== clienteFound.nombre) await supabase.from("clientes").update({ nombre: form.nombre }).eq("id", clienteId);
+      if (form.nombre && form.nombre !== clienteFound.nombre) {
+        await supabase.from("clientes").update({ nombre: form.nombre }).eq("id", clienteId);
+      }
     } else {
-      const { data: nc } = await supabase.from("clientes").insert({ nombre: form.nombre, telefono: form.telefono }).select().single();
-      if (!nc) return;
-      clienteId = nc.id;
+      const { data: existente } = await supabase.from("clientes").select("id").eq("telefono", form.telefono).maybeSingle();
+      if (existente) {
+        clienteId = existente.id;
+      } else {
+        const { data: nc, error: eCli } = await supabase.from("clientes").insert({ nombre: form.nombre, telefono: form.telefono }).select("id").single();
+        if (eCli || !nc) { alert("No se pudo guardar el cliente: " + (eCli?.message || "sin datos")); return; }
+        clienteId = nc.id;
+      }
     }
-    const { data: nueva } = await supabase.from("llamadas").insert({
+
+    // 2) Registrar la llamada
+    const { data: nueva, error: eLlam } = await supabase.from("llamadas").insert({
       cliente_id: clienteId, municipio_id: parseInt(form.municipio_id), modelo_id: parseInt(form.modelo_id),
       antiguedad_id: form.antiguedad_id ? parseInt(form.antiguedad_id) : null,
       status_id: statusId, registrado_por: userId, resuelto_por: statusNombre === "atendido_resuelto" ? userId : null,
       centro_dirigido: centroDirigido || null, problema: form.problema || null
     }).select("id").single();
+    if (eLlam) { alert("No se pudo registrar la llamada: " + eLlam.message); return; }
 
+    // 3) Cerrar la llamada perdida si venimos de "Por devolver"
     if (devolviendo) {
       // San Juan / San Germán / Se resolvió = atendida. Referido a técnicos = pendiente del técnico.
       const resPerdida = statusNombre === "pendiente_willy" ? "pendiente_tecnico" : "atendida";
-      await supabase.from("llamadas_perdidas").update({
+      const { error: ePerd } = await supabase.from("llamadas_perdidas").update({
         estado: "cerrada", resultado: resPerdida, cerrada_por: user, cerrada_at: new Date().toISOString(), llamada_id: nueva?.id || null
       }).eq("id", devolviendo.id);
+      if (ePerd) { alert("La llamada se registró, pero no se pudo cerrar la perdida: " + ePerd.message); }
       setDevolviendo(null);
       fetchPerdidas();
     }
+
     setSaved(true); fetchRecords();
     setTimeout(() => { setForm(FORM0); setClienteFound(null); setClienteHistory([]); setSaved(false); }, 1600);
   };
@@ -644,7 +660,12 @@ export default function App() {
   // Lo que ve cada uno: las abiertas + las que el mismo esta atendiendo. Las que tomo otro desaparecen de su lista.
   // Visibles: abiertas o la que yo atiendo; se ocultan las dormidas (reintento programado) hasta su hora
   const ahoraMs = Date.now();
-  const noCerradas = perdidas.filter(p => p.estado === "abierta" || p.tomada_por === user);
+  // Si una llamada lleva mas de LOCK_MIN minutos "tomada" sin cerrarse, se considera abandonada y vuelve a la lista de todos.
+  const LOCK_MIN = 15;
+  const noCerradas = perdidas.filter(p => {
+    const abandonada = p.estado === "tomada" && (!p.tomada_at || (ahoraMs - new Date(p.tomada_at).getTime()) > LOCK_MIN * 60000);
+    return p.estado === "abierta" || p.tomada_por === user || abandonada;
+  });
   // Nuevas: nunca se han llamado. Reintento: ya se les llamo y no contestaron (dormidas o listas para decidir).
   const perdidasNuevas = noCerradas.filter(p => (p.intentos || 0) === 0);
   const perdidasReintento = noCerradas
@@ -1178,36 +1199,95 @@ function MetricasHoy({ perdidas, cerradas }) {
   const hoyCe = cerradas.filter(p => isToday(p.primera_llamada));
   const todas = [...hoyAb, ...hoyCe];
   const entraron = todas.length;
-  const vm = todas.filter(p => p.tiene_voicemail).length;
-  const esAtendida = p => p.resultado === "atendida" || p.resultado === "contestada";
-  const esContactada = p => esAtendida(p) || p.resultado === "pendiente_tecnico" || p.resultado === "ya_atendido";
-  const dev = hoyCe.filter(esContactada);            // devueltas = se contactó al cliente
-  const conMin = hoyCe.filter(p => esAtendida(p) || p.resultado === "pendiente_tecnico");
-  const prom = conMin.length ? Math.round(conMin.reduce((a, p) => a + (p.minutos_respuesta || 0), 0) / conMin.length) : null;
-  const noCont = hoyCe.filter(p => p.resultado === "no_contesta").length;
-  const pct = entraron ? Math.round(dev.length / entraron * 100) : 0;
-  // quien atendio hoy (devueltas por persona + su tiempo promedio)
+
+  // Clasificacion por resultado
+  const esNoAplica  = p => p.resultado === "no_aplica" || p.resultado === "spam";
+  const esContactada = p => p.resultado === "atendida" || p.resultado === "contestada" || p.resultado === "pendiente_tecnico" || p.resultado === "ya_atendido";
+  const esDevuelta  = p => esContactada(p) || p.resultado === "no_contesta"; // se hizo el intento de llamar de vuelta
+
+  const noAplica    = hoyCe.filter(esNoAplica).length;        // numero malo / repetida / basura
+  const reales      = entraron - noAplica;                    // lo que de verdad habia que devolver
+  const devueltas   = hoyCe.filter(esDevuelta).length;        // se les llamo de vuelta (incluye no contesto)
+  const contactadas = hoyCe.filter(esContactada).length;      // el cliente cogio
+  const noCont      = hoyCe.filter(p => p.resultado === "no_contesta").length;
+
+  const conMin = hoyCe.filter(p => esContactada(p) && p.minutos_respuesta != null);
+  const prom = conMin.length ? Math.round(conMin.reduce((a, p) => a + p.minutos_respuesta, 0) / conMin.length) : null;
+
+  const pctDev  = reales ? Math.round(devueltas / reales * 100) : 0;       // esfuerzo del equipo
+  const pctCont = devueltas ? Math.round(contactadas / devueltas * 100) : 0; // de las llamadas, cuantas cogieron
+
+  // Por persona: lo que hizo cada uno
   const porPersona = {};
-  hoyCe.forEach(p => { if (!p.cerrada_por) return; const q = porPersona[p.cerrada_por] || (porPersona[p.cerrada_por] = { n: 0, dev: 0, min: 0 }); q.n++; if (esContactada(p)) { q.dev++; if (p.minutos_respuesta != null) q.min += p.minutos_respuesta; } });
+  hoyCe.forEach(p => {
+    if (!p.cerrada_por) return;
+    const q = porPersona[p.cerrada_por] || (porPersona[p.cerrada_por] = { dev: 0, cont: 0, min: 0, noc: 0, na: 0 });
+    if (esNoAplica(p)) { q.na++; return; }
+    if (esDevuelta(p)) q.dev++;
+    if (esContactada(p)) { q.cont++; if (p.minutos_respuesta != null) q.min += p.minutos_respuesta; }
+    if (p.resultado === "no_contesta") q.noc++;
+  });
   const personas = Object.entries(porPersona).sort((a, b) => b[1].dev - a[1].dev);
-  const Row = ({ l, v }) => <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "8px 0", borderBottom: `1px solid ${C.slateBg}` }}><span style={{ color: C.text }}>{l}</span><b>{v}</b></div>;
+
+  const Row = ({ l, sub, v, color }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.slateBg}` }}>
+      <span style={{ fontSize: 13, color: C.text }}>{l}{sub && <small style={{ display: "block", fontSize: 11, color: C.faint, fontWeight: 400, marginTop: 1 }}>{sub}</small>}</span>
+      <b style={{ fontSize: 15, fontVariantNumeric: "tabular-nums", color: color || C.ink }}>{v}</b>
+    </div>
+  );
+  const Cell = ({ num, cap, pct }) => (
+    <div style={{ flex: 1, borderRadius: 12, padding: "14px 8px", textAlign: "center", background: C.greenBg }}>
+      <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1, color: C.green, fontVariantNumeric: "tabular-nums" }}>{num}</div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: C.green, marginTop: 6 }}>{cap}</div>
+      {pct != null && <div style={{ fontSize: 11, color: C.green, marginTop: 2, opacity: .85 }}>{pct}</div>}
+    </div>
+  );
+  const Bar = ({ t, pct, color }) => (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 5 }}><span>{t}</span><span>{pct}%</span></div>
+      <div style={{ height: 9, borderRadius: 5, background: C.slateBg, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", borderRadius: 5, background: color }} /></div>
+    </div>
+  );
+  const Chip = ({ t, tone }) => {
+    const m = { g: [C.greenBg, C.green], s: [C.slateBg, C.text], a: [C.amberBg, C.amber] }[tone] || [C.slateBg, C.text];
+    return <span style={{ fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 999, background: m[0], color: m[1] }}>{t}</span>;
+  };
+
   return (
     <div style={S.card}>
       <div style={{ ...S.label, marginBottom: 6 }}>Hoy</div>
+
+      <div style={{ display: "flex", gap: 10, margin: "2px 0 12px" }}>
+        <Cell num={devueltas} cap="Devueltas" pct={`${pctDev}% de las reales`} />
+        <Cell num={contactadas} cap="Contactadas" pct={`${pctCont}% cogió`} />
+      </div>
+
       <Row l="Entraron" v={entraron} />
-      <Row l="Voicemail" v={vm} />
-      <Row l="Devueltas" v={dev.length} />
-      <Row l="No contestaron" v={noCont} />
+      <Row l="No aplican" sub="número malo / repetida / basura" v={noAplica} color={C.muted} />
+      <Row l="Reales por devolver" v={reales} />
+      <Row l="Devueltas" sub="se les llamó de vuelta" v={devueltas} color={C.green} />
+      <Row l="Contactadas" sub="el cliente cogió" v={contactadas} color={C.green} />
+      <Row l="No contestó" sub="el cliente no cogió" v={noCont} color={C.amber} />
       <Row l="Tiempo de respuesta" v={prom != null ? `${prom} min` : "—"} />
-      <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>{pct}% devueltas</div>
-      <div style={{ height: 8, background: C.slateBg, borderRadius: 4, overflow: "hidden", marginTop: 6 }}><div style={{ width: `${pct}%`, height: "100%", background: C.green }} /></div>
+
+      <Bar t="Devueltas" pct={pctDev} color={C.green} />
+      <Bar t="Contactó al cliente" pct={pctCont} color={C.navy} />
+
       {personas.length > 0 && (
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 16 }}>
           <div style={{ ...S.label, marginBottom: 6 }}>Quién atendió</div>
           {personas.map(([n, q]) => (
-            <div key={n} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0" }}>
-              <span>{n}</span>
-              <span style={{ color: C.muted }}><b style={{ color: C.text }}>{q.dev}</b> devuelta{q.dev !== 1 ? "s" : ""}{q.dev ? ` · ${Math.round(q.min / q.dev)} min` : ""}{q.n - q.dev ? ` · ${q.n - q.dev} sin contestar/no aplica` : ""}</span>
+            <div key={n} style={{ padding: "11px 0", borderBottom: `1px solid ${C.slateBg}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{n}</span>
+                <span style={{ fontSize: 12, color: C.muted }}>{q.cont ? `${Math.round(q.min / q.cont)} min prom.` : "—"}</span>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                <Chip t={`${q.dev} devuelta${q.dev !== 1 ? "s" : ""}`} tone="g" />
+                <Chip t={`${q.cont} contactó`} tone={q.cont ? "g" : "s"} />
+                {q.noc > 0 && <Chip t={`${q.noc} no contestó`} tone="a" />}
+                {q.na > 0 && <Chip t={`${q.na} no aplica`} tone="s" />}
+              </div>
             </div>
           ))}
         </div>
