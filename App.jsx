@@ -665,25 +665,27 @@ export default function App() {
   const pendingCount = records.filter(r => r.status === "pendiente_willy").length;
   const citasCount = records.filter(r => r.status === "cita_domicilio").length;
   // Lo que ve cada uno: las abiertas + las que el mismo esta atendiendo. Las que tomo otro desaparecen de su lista.
-  // Visibles: abiertas o la que yo atiendo; se ocultan las dormidas (reintento programado) hasta su hora
   const ahoraMs = Date.now();
-  // Si una llamada lleva mas de LOCK_MIN minutos "tomada" sin cerrarse, se considera abandonada y vuelve a la lista de todos.
+  // Si una llamada lleva mas de LOCK_MIN minutos "tomada" sin cerrarse, se considera abandonada y vuelve a disponibles.
   const LOCK_MIN = 15;
-  const noCerradas = perdidas.filter(p => {
-    const abandonada = p.estado === "tomada" && (!p.tomada_at || (ahoraMs - new Date(p.tomada_at).getTime()) > LOCK_MIN * 60000);
-    return p.estado === "abierta" || p.tomada_por === user || abandonada;
-  });
-  // Nuevas: nunca se han llamado. Reintento: ya se les llamo y no contestaron (dormidas o listas para decidir).
-  const perdidasNuevas = noCerradas.filter(p => (p.intentos || 0) === 0);
-  const perdidasReintento = noCerradas
+  // En vivo: alguien la está atendiendo ahora mismo (tomada y no abandonada). Todos la ven.
+  const enVivo = (p) => p.estado === "tomada" && p.tomada_at && (ahoraMs - new Date(p.tomada_at).getTime()) <= LOCK_MIN * 60000;
+  const noCerradas = perdidas; // la vista ya excluye las cerradas
+  // En atención ahora: las que alguien trabaja en vivo (mías primero), visibles para los dos
+  const perdidasEnVivo = noCerradas.filter(enVivo).sort((a, b) => (b.tomada_por === user ? 0 : 1) - (a.tomada_por === user ? 0 : 1));
+  // Disponibles: nadie las tiene en vivo (abiertas o tomada abandonada)
+  const disponibles = noCerradas.filter(p => !enVivo(p));
+  const perdidasNuevas = disponibles.filter(p => (p.intentos || 0) === 0);
+  const perdidasReintento = disponibles
     .filter(p => (p.intentos || 0) >= 1)
     .sort((a, b) => ((b.intentos || 0) >= 2 ? 1 : 0) - ((a.intentos || 0) >= 2 ? 1 : 0));
   const perdidasVisibles = noCerradas;
-  const perdidasCount = perdidasVisibles.length;
+  const perdidasCount = disponibles.length;
 
   // Una fila de la lista de perdidas (se reusa en Nuevas y en Reintento)
   const filaPerdida = (p) => {
     const mia = p.tomada_por === user;
+    const porOtro = enVivo(p) && !mia;
     const decidir = (p.intentos || 0) >= 2 && p.estado !== "cerrada";
     const dormida = p.dormida_hasta && new Date(p.dormida_hasta).getTime() > ahoraMs;
     const minsFalta = dormida ? Math.max(1, Math.ceil((new Date(p.dormida_hasta).getTime() - ahoraMs) / 60000)) : 0;
@@ -700,7 +702,8 @@ export default function App() {
               {decidir && <span style={S.pill(C.redBg, C.red)}>{p.intentos} intentos · decidir</span>}
               {!decidir && dormida && <span style={S.pill(C.amberBg, C.amber)}>{p.intentos} {p.intentos === 1 ? "intento" : "intentos"} · vuelve en {minsFalta} min</span>}
               {!decidir && !dormida && p.intentos > 0 && <span style={S.pill(C.slateBg, C.text)}>{p.intentos} {p.intentos === 1 ? "intento" : "intentos"} sin contestar</span>}
-              {mia && <span style={S.pill(C.greenBg, C.green)}>La estás atendiendo</span>}
+              {mia && <span style={S.pill(C.greenBg, C.green)}>Tú la estás atendiendo</span>}
+              {porOtro && <span style={S.pill(C.blueBg, C.blue)}>{p.tomada_por} la está atendiendo</span>}
               {p.cola && <span style={S.pill(C.slateBg, C.muted)}>{p.cola.replace("MRY-PR_", "")}</span>}
             </div>
             {p.voicemail_url && (
@@ -717,7 +720,9 @@ export default function App() {
             </div>
             {mia
               ? <button onClick={() => (devolviendo && devolviendo.id === p.id) ? setTab("llamadas") : devolver(p)} style={{ ...S.btn("ghost"), padding: "11px 18px", fontSize: 14, width: "auto" }}>Continuar</button>
-              : <button onClick={() => devolver(p)} style={{ ...S.btn(decidir ? "red" : "primary"), padding: "11px 18px", fontSize: 14, width: "auto" }}>{decidir ? "Decidir" : (p.intentos ? "Reintentar" : "Atender")}</button>}
+              : porOtro
+                ? <span style={{ fontSize: 13, fontWeight: 700, color: C.blue, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: C.blue }} />ocupada</span>
+                : <button onClick={() => devolver(p)} style={{ ...S.btn(decidir ? "red" : "primary"), padding: "11px 18px", fontSize: 14, width: "auto" }}>{decidir ? "Decidir" : (p.intentos ? "Reintentar" : "Atender")}</button>}
           </div>
         </div>
       </div>
@@ -899,6 +904,13 @@ export default function App() {
               <button onClick={sincronizar} disabled={sync.busy} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto", opacity: sync.busy ? 0.6 : 1 }}>{sync.busy ? "Revisando..." : "Actualizar"}</button>
             </div>
             {perdidasVisibles.length === 0 && <Empty titulo="Todo devuelto" texto="Cuando entre una llamada perdida o un voicemail aparece aquí y suena un aviso." />}
+
+            {perdidasEnVivo.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <SecHead dot={C.green} t="En atención ahora" n={perdidasEnVivo.length} d="En vivo · se ve quién está atendiendo cada una." />
+                {perdidasEnVivo.map(filaPerdida)}
+              </div>
+            )}
 
             {perdidasNuevas.length > 0 && (
               <>
