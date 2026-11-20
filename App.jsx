@@ -535,10 +535,11 @@ export default function App() {
     if (devolviendo) {
       // San Juan / San Germán / Se resolvió = atendida. Referido a técnicos = pendiente del técnico.
       const resPerdida = statusNombre === "pendiente_willy" ? "pendiente_tecnico" : "atendida";
-      const { error: ePerd } = await supabase.from("llamadas_perdidas").update({
+      const { data: cerrada, error: ePerd } = await supabase.from("llamadas_perdidas").update({
         estado: "cerrada", resultado: resPerdida, cerrada_por: user, cerrada_at: new Date().toISOString(), llamada_id: nueva?.id || null
-      }).eq("id", devolviendo.id);
+      }).eq("id", devolviendo.id).select("id");
       if (ePerd) { alert("La llamada se registró, pero no se pudo cerrar la perdida: " + ePerd.message); }
+      else if (!cerrada || cerrada.length === 0) { alert("La llamada se guardó, pero la perdida no se cerró (no se encontró o sin permiso)."); }
       setDevolviendo(null);
       fetchPerdidas();
     }
@@ -594,6 +595,12 @@ export default function App() {
   const noAplicaAtendiendo = async () => {
     const p = devolviendo; if (!p) return;
     await supabase.from("llamadas_perdidas").update({ estado: "cerrada", resultado: "no_aplica", cerrada_por: user, cerrada_at: new Date().toISOString() }).eq("id", p.id);
+    limpiarAtendiendo(); fetchPerdidas();
+  };
+  // Spam: llamada basura / telemarketing. Se cierra como spam.
+  const spamAtendiendo = async () => {
+    const p = devolviendo; if (!p) return;
+    await supabase.from("llamadas_perdidas").update({ estado: "cerrada", resultado: "spam", cerrada_por: user, cerrada_at: new Date().toISOString() }).eq("id", p.id);
     limpiarAtendiendo(); fetchPerdidas();
   };
   // Cancelar: la suelta y vuelve a la lista de los dos
@@ -810,6 +817,7 @@ export default function App() {
                     : <span className="tipw"><button onClick={() => noContestoAtendiendo()} style={{ ...S.btn("amber"), padding: "9px 14px", fontSize: 13, width: "auto" }}>No contestó</button><span className="tip">El cliente no cogió. <b>1er intento:</b> vuelve dormida 30 min. <b>2do intento:</b> queda para decidir.</span></span>}
                   <span className="tipw"><button onClick={() => yaAtendidoAtendiendo()} style={{ ...S.btn("green"), padding: "9px 14px", fontSize: 13, width: "auto" }}>Ya estaba atendido</button><span className="tip">El cliente <b>ya había sido atendido</b> o lo resolvió por su cuenta. Se cierra como contactado, sin gestión nueva.</span></span>
                   <span className="tipw"><button onClick={() => noAplicaAtendiendo()} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto" }}>No aplica</button><span className="tip">Número equivocado, llamada repetida o basura. Se descarta.</span></span>
+                  <span className="tipw"><button onClick={() => spamAtendiendo()} style={{ ...S.btn("ghost"), padding: "9px 14px", fontSize: 13, width: "auto" }}>Spam</button><span className="tip">Llamada basura o telemarketing. Se cierra como <b>spam</b>.</span></span>
                   <button onClick={() => cancelarAtendiendo()} style={{ background: "none", border: "none", color: C.amber, fontSize: 13, cursor: "pointer", fontFamily: FONT, padding: "0 4px", textDecoration: "underline" }}>Cancelar</button>
                 </div>
               </div>
@@ -866,7 +874,6 @@ export default function App() {
                     ["Se resolvió", "por teléfono", "primary", () => saveCallWith("atendido_resuelto", null), "El problema se resolvió en la misma llamada." + (devolviendo ? " La perdida queda como Devuelta y atendida." : "")],
                     ["Enviado a San Juan", "", "green", () => saveCallWith("dirigido", "San Juan"), "El cliente va al centro de servicio de San Juan." + (devolviendo ? " La perdida queda como Devuelta y atendida." : "")],
                     ["Enviado a San Germán", "", "blue", () => saveCallWith("dirigido", "San Germán"), "El cliente va al centro de servicio de San Germán." + (devolviendo ? " La perdida queda como Devuelta y atendida." : "")],
-                    ["Referido a técnicos", "entra al Queue", "amber", () => saveCallWith("pendiente_willy", null), "El caso entra al Queue de los técnicos para que lo llamen." + (devolviendo ? " La perdida queda como Devuelta · pendiente técnico." : "")],
                   ].map(([t, sub, kind, fn, tip]) => (
                     <span key={t} className="tipw" style={{ display: "block" }}>
                       <button onClick={fn} disabled={!canSave} style={{ ...S.btn(canSave ? kind : "disabled"), height: 56, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -911,7 +918,7 @@ export default function App() {
               <div style={{ marginTop: 20 }}>
                 <SecHead dot={C.green} t="Atendidas · últimos 7 días" n={perdidasCerradas.length} d="Devueltas y cerradas." />
                 {perdidasCerradas.map(p => {
-                  const res = { atendida: ["Devuelta y atendida", C.greenBg, C.green], contestada: ["Devuelta y atendida", C.greenBg, C.green], pendiente_tecnico: ["Devuelta · pendiente técnico", C.amberBg, C.amber], ya_atendido: ["Ya estaba atendido", C.violetBg, C.violet], no_contesta: ["Devuelta, no contestó", C.redBg, C.red], spam: ["No aplica", C.slateBg, C.text], no_aplica: ["No aplica", C.slateBg, C.text] }[p.resultado] || [p.resultado, C.slateBg, C.text];
+                  const res = { atendida: ["Devuelta y atendida", C.greenBg, C.green], contestada: ["Devuelta y atendida", C.greenBg, C.green], pendiente_tecnico: ["Devuelta · pendiente técnico", C.amberBg, C.amber], ya_atendido: ["Ya estaba atendido", C.violetBg, C.violet], no_contesta: ["Devuelta, no contestó", C.redBg, C.red], spam: ["Spam", C.slateBg, C.text], no_aplica: ["No aplica", C.slateBg, C.text] }[p.resultado] || [p.resultado, C.slateBg, C.text];
                   return (
                     <div key={p.id} style={{ ...S.card, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                       <div style={{ fontSize: 13 }}><b>{fmtTel(p.telefono)}</b> <span style={{ color: C.muted }}>· {p.cerrada_por || "—"}{p.minutos_respuesta != null ? ` · ${Math.round(p.minutos_respuesta)} min` : ""}{p.intentos ? ` · ${p.intentos} intentos` : ""} · {fmtDate(p.cerrada_at)}</span></div>
