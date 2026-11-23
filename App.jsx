@@ -1162,7 +1162,7 @@ export default function App() {
                         <Stat label="Entraron" value={m.total} tone="slate" />
                         <Stat label="Perdidas" value={m.perdidas} tone="slate" />
                         <Stat label="Voicemail" value={m.voicemails} tone="slate" />
-                        <Stat label="Devueltas" value={m.devueltas} tone="green" sub={m.min_respuesta != null ? `${m.min_respuesta} min prom.` : ""} />
+                        <Stat label="Devueltas" value={m.devueltas} tone="green" />
                         <Stat label="Atendidas" value={m.atendidas} tone="green" />
                         <Stat label="Pendiente técnico" value={m.pendiente_tecnico} tone="amber" />
                         <Stat label="Ya estaba atendido" value={m.ya_atendido} tone="slate" />
