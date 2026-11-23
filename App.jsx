@@ -61,6 +61,47 @@ const S = {
 
 /* ---------- utilidades ---------- */
 function fmtDate(d) { return new Date(d).toLocaleDateString("es-PR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+/* ---------- Tiempo en devolver una llamada perdida ----------
+   Empieza cuando entro la llamada (email de Verve) y termina cuando alguien le dio "Atender".
+   Si no hay "Atender" se usa el intento de "no contesto", y si tampoco, el cierre.
+   Solo cuenta horas de trabajo (lunes a sabado, 8:00 a.m. a 5:00 p.m., hora de PR) y solo llamadas desde el 23 de noviembre de 2026. */
+const DEVOLVER_DESDE = "2026-11-23T00:00:00-04:00";
+const HORA_ABRE = 8, HORA_CIERRA = 17;
+const PR_MS = 4 * 3600000; // Puerto Rico es UTC-4 todo el ano
+const SE_LLAMO = ["atendida", "contestada", "pendiente_tecnico", "no_contesta"];
+function momentoDevuelta(p) {
+  const c = [[p.tomada_at, "se atendió"], [p.ultimo_intento, "se le llamó"], [p.cerrada_at, "se cerró"]].filter(x => x[0]);
+  if (!c.length) return null;
+  return c.reduce((a, b) => (new Date(b[0]) < new Date(a[0]) ? b : a));
+}
+function minLaborables(iniIso, finIso) {
+  const a = new Date(iniIso).getTime() - PR_MS, b = new Date(finIso).getTime() - PR_MS;
+  if (!(b > a)) return 0;
+  let total = 0;
+  const dia = new Date(a); dia.setUTCHours(0, 0, 0, 0);
+  for (let d = dia.getTime(); d <= b; d += 86400000) {
+    if (new Date(d).getUTCDay() === 0) continue; // domingo no cuenta
+    const ini = Math.max(a, d + HORA_ABRE * 3600000), fin = Math.min(b, d + HORA_CIERRA * 3600000);
+    if (fin > ini) total += fin - ini;
+  }
+  return Math.round(total / 60000);
+}
+function minDevolver(p) {
+  if (p.estado !== "cerrada" || !p.primera_llamada || new Date(p.primera_llamada) < new Date(DEVOLVER_DESDE)) return null;
+  const m = momentoDevuelta(p);
+  return m ? minLaborables(p.primera_llamada, m[0]) : null;
+}
+// Promedio de las que si se devolvieron (contestara o no el cliente). "No aplica" y "ya estaba atendido" no entran.
+function promDevolver(lista) {
+  const v = lista.filter(p => SE_LLAMO.includes(p.resultado)).map(minDevolver).filter(x => x != null);
+  return v.length ? { min: Math.round(v.reduce((x, y) => x + y, 0) / v.length), n: v.length } : null;
+}
+function entroYSalio(p) {
+  const m = p.estado === "cerrada" ? momentoDevuelta(p) : null;
+  if (!m) return `entró ${fmtDate(p.primera_llamada)} · sin devolver`;
+  const min = minDevolver(p);
+  return `entró ${fmtDate(p.primera_llamada)} · ${m[1]} ${fmtDate(m[0])}` + (min != null ? ` · ${min} min` : "");
+}
 function fmtTel(t) { const d = String(t || "").replace(/\D/g, "").replace(/^1(\d{10})$/, "$1"); return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}` : (t || ""); }
 function soloDigitos(t) { return String(t || "").replace(/\D/g, "").replace(/^1(\d{10})$/, "$1"); }
 function hace(iso) {
@@ -928,12 +969,12 @@ export default function App() {
 
             {perdidasCerradas.length > 0 && (
               <div style={{ marginTop: 20 }}>
-                <SecHead dot={C.green} t="Atendidas · últimos 7 días" n={perdidasCerradas.length} d="Devueltas y cerradas." />
+                <SecHead dot={C.green} t="Atendidas · últimos 7 días" n={perdidasCerradas.length} d={"Devueltas y cerradas." + (promDevolver(perdidasCerradas) ? ` Promedio en devolver desde el 23 nov: ${promDevolver(perdidasCerradas).min} min (${promDevolver(perdidasCerradas).n} llamadas).` : "")} />
                 {perdidasCerradas.map(p => {
                   const res = { atendida: ["Devuelta y atendida", C.greenBg, C.green], contestada: ["Devuelta y atendida", C.greenBg, C.green], pendiente_tecnico: ["Devuelta · pendiente técnico", C.amberBg, C.amber], ya_atendido: ["Ya estaba atendido", C.violetBg, C.violet], no_contesta: ["Devuelta, no contestó", C.redBg, C.red], spam: ["Spam", C.slateBg, C.text], no_aplica: ["No aplica", C.slateBg, C.text] }[p.resultado] || [p.resultado, C.slateBg, C.text];
                   return (
                     <div key={p.id} style={{ ...S.card, padding: "10px 14px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                      <div style={{ fontSize: 13 }}><b>{fmtTel(p.telefono)}</b> <span style={{ color: C.muted }}>· {p.cerrada_por || "—"}{p.minutos_respuesta != null ? ` · ${Math.round(p.minutos_respuesta)} min` : ""}{p.intentos ? ` · ${p.intentos} intentos` : ""} · {fmtDate(p.cerrada_at)}</span></div>
+                      <div style={{ fontSize: 13 }}><b>{fmtTel(p.telefono)}</b> <span style={{ color: C.muted }}>· {entroYSalio(p)} · {p.cerrada_por || "—"}{p.intentos ? ` · ${p.intentos} intentos` : ""}</span></div>
                       <span style={S.pill(res[1], res[2])}>{res[0]}</span>
                     </div>
                   );
@@ -1230,8 +1271,8 @@ function MetricasHoy({ perdidas, cerradas }) {
   const contactadas = hoyCe.filter(esContactada).length;      // el cliente cogio
   const noCont      = hoyCe.filter(p => p.resultado === "no_contesta").length;
 
-  const conMin = hoyCe.filter(p => esContactada(p) && p.minutos_respuesta != null);
-  const prom = conMin.length ? Math.round(conMin.reduce((a, p) => a + p.minutos_respuesta, 0) / conMin.length) : null;
+  const tiempo = promDevolver(hoyCe);
+  const tiempoDe = n => promDevolver(hoyCe.filter(p => p.cerrada_por === n));
 
   const pctDev  = reales ? Math.round(devueltas / reales * 100) : 0;       // esfuerzo del equipo
   const pctCont = devueltas ? Math.round(contactadas / devueltas * 100) : 0; // de las llamadas, cuantas cogieron
@@ -1243,7 +1284,7 @@ function MetricasHoy({ perdidas, cerradas }) {
     const q = porPersona[p.cerrada_por] || (porPersona[p.cerrada_por] = { dev: 0, cont: 0, min: 0, noc: 0, na: 0 });
     if (esNoAplica(p)) { q.na++; return; }
     if (esDevuelta(p)) q.dev++;
-    if (esContactada(p)) { q.cont++; if (p.minutos_respuesta != null) q.min += p.minutos_respuesta; }
+    if (esContactada(p)) q.cont++;
     if (p.resultado === "no_contesta") q.noc++;
   });
   const personas = Object.entries(porPersona).sort((a, b) => b[1].dev - a[1].dev);
@@ -1287,7 +1328,7 @@ function MetricasHoy({ perdidas, cerradas }) {
       <Row l="Devueltas" sub="se les llamó de vuelta" v={devueltas} color={C.green} />
       <Row l="Contactadas" sub="el cliente cogió" v={contactadas} color={C.green} />
       <Row l="No contestó" sub="el cliente no cogió" v={noCont} color={C.amber} />
-      <Row l="Tiempo de respuesta" v={prom != null ? `${prom} min` : "—"} />
+      <Row l="Promedio en devolver" sub={'desde que entra hasta que le dan "Atender" · solo horas de trabajo'} v={tiempo ? `${tiempo.min} min` : "—"} />
 
       <Bar t="Devueltas" frac={`${devueltas}/${reales}`} pct={pctDev} color={C.green} />
       <Bar t="Contactó al cliente" frac={`${contactadas}/${devueltas}`} pct={pctCont} color={C.navy} />
@@ -1299,7 +1340,7 @@ function MetricasHoy({ perdidas, cerradas }) {
             <div key={n} style={{ padding: "11px 0", borderBottom: `1px solid ${C.slateBg}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 14, fontWeight: 600 }}>{n}</span>
-                <span style={{ fontSize: 12, color: C.muted }}>{q.cont ? `${Math.round(q.min / q.cont)} min prom.` : "—"}</span>
+                <span style={{ fontSize: 12, color: C.muted }}>{tiempoDe(n) ? `promedio ${tiempoDe(n).min} min` : "—"}</span>
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                 <Chip t={`${q.dev} devuelta${q.dev !== 1 ? "s" : ""}`} tone="g" />
